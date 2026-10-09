@@ -365,6 +365,24 @@ namespace Invoice.Infrastructure.Persistence.Migrations
                     b.ToTable("Products", (string)null);
                 });
 
+            modelBuilder.Entity("Invoice.Domain.Entities.Settings", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Value")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("Settings", (string)null);
+                });
+
             modelBuilder.Entity("Invoice.Domain.Entities.Supplier", b =>
                 {
                     b.Property<int>("Id")

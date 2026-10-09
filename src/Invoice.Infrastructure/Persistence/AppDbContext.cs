@@ -15,6 +15,7 @@ public class AppDbContext : DbContext
 
     // ========= الجداول =========
 
+    public DbSet<Settings> Settings => Set<Settings>();
     public DbSet<Supplier> Suppliers => Set<Supplier>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Invoice.Domain.Entities.Invoice> Invoices => Set<Invoice.Domain.Entities.Invoice>();
@@ -27,8 +28,16 @@ public class AppDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // ========= إعدادات Supplier =========
+        // ========= Settings =========
+        modelBuilder.Entity<Settings>(entity =>
+        {
+            entity.ToTable("Settings");
+            entity.HasKey(e => e.Key);
+            entity.Property(e => e.Key).HasMaxLength(100);
+            entity.Property(e => e.Value).HasMaxLength(2000);
+        });
 
+        // ========= Supplier =========
         modelBuilder.Entity<Supplier>(entity =>
         {
             entity.ToTable("Suppliers");
@@ -42,8 +51,7 @@ public class AppDbContext : DbContext
             entity.Property(e => e.RowVersion).IsRowVersion();
         });
 
-        // ========= إعدادات Product =========
-
+        // ========= Product =========
         modelBuilder.Entity<Product>(entity =>
         {
             entity.ToTable("Products");
@@ -67,8 +75,7 @@ public class AppDbContext : DbContext
                   .OnDelete(DeleteBehavior.Restrict);
         });
 
-        // ========= إعدادات Invoice =========
-
+        // ========= Invoice =========
         modelBuilder.Entity<Invoice.Domain.Entities.Invoice>(entity =>
         {
             entity.ToTable("Invoices");
@@ -100,8 +107,7 @@ public class AppDbContext : DbContext
                   .OnDelete(DeleteBehavior.Restrict);
         });
 
-        // ========= إعدادات InvoiceItem =========
-
+        // ========= InvoiceItem =========
         modelBuilder.Entity<InvoiceItem>(entity =>
         {
             entity.ToTable("InvoiceItems");
@@ -127,8 +133,7 @@ public class AppDbContext : DbContext
                   .OnDelete(DeleteBehavior.Restrict);
         });
 
-        // ========= إعدادات InvoicePayment =========
-
+        // ========= InvoicePayment =========
         modelBuilder.Entity<InvoicePayment>(entity =>
         {
             entity.ToTable("InvoicePayments");
@@ -142,8 +147,7 @@ public class AppDbContext : DbContext
                   .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // ========= إعدادات InvoiceDiscount =========
-
+        // ========= InvoiceDiscount =========
         modelBuilder.Entity<InvoiceDiscount>(entity =>
         {
             entity.ToTable("InvoiceDiscounts");
@@ -157,8 +161,7 @@ public class AppDbContext : DbContext
                   .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // ========= إعدادات InvoiceExpense =========
-
+        // ========= InvoiceExpense =========
         modelBuilder.Entity<InvoiceExpense>(entity =>
         {
             entity.ToTable("InvoiceExpenses");
