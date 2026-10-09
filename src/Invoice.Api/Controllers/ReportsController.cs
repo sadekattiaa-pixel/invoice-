@@ -128,11 +128,6 @@ public class ReportsController : ControllerBase
     // 3) تقرير الأرباح
     // ============================================================
 
-    /// <summary>
-    /// تقرير الأرباح العام: إحصائيات + قائمة الفواتير + اتجاه شهري.
-    /// period: today / week / month / quarter / year / all
-    /// supplierId: اختياري — يقصر التقرير على مورد واحد.
-    /// </summary>
     [HttpGet("profit")]
     public async Task<ActionResult> GetProfitReport(
         [FromQuery] string period = "year",
@@ -148,13 +143,11 @@ public class ReportsController : ControllerBase
         if (supplierId.HasValue)
             query = query.Where(i => i.SupplierId == supplierId.Value);
 
-        // إحصائيات
         var invoicesCount = await query.CountAsync();
         var totalSales = await query.SumAsync(i => (decimal?)i.TotalSales) ?? 0m;
         var totalProfit = await query.SumAsync(i => (decimal?)i.TotalProfit) ?? 0m;
         var avgMargin = await query.AverageAsync(i => (decimal?)i.ProfitMargin) ?? 0m;
 
-        // قائمة الفواتير مع اسم المورد
         var invoices = await query
             .OrderByDescending(i => i.InvoiceDate)
             .ThenByDescending(i => i.Id)
@@ -170,7 +163,6 @@ public class ReportsController : ControllerBase
             })
             .ToListAsync();
 
-        // الاتجاه الشهري
         var monthly = await query
             .GroupBy(i => new { i.InvoiceDate.Year, i.InvoiceDate.Month })
             .Select(g => new
@@ -191,6 +183,67 @@ public class ReportsController : ControllerBase
             stats = new { invoicesCount, totalSales, totalProfit, avgMargin },
             invoices,
             monthly
+        });
+    }
+
+    // ============================================================
+    // 4) تقرير الفترة
+    // ============================================================
+
+    /// <summary>
+    /// تقرير بين تاريخين: إحصائيات + قائمة فواتير + أرباح يومية.
+    /// </summary>
+    [HttpGet("period")]
+    public async Task<ActionResult> GetPeriodReport(
+        [FromQuery] DateOnly dateFrom,
+        [FromQuery] DateOnly dateTo,
+        [FromQuery] int? supplierId = null)
+    {
+        var query = _db.Invoices
+            .Where(i => i.Status == "Archived"
+                        && i.InvoiceDate >= dateFrom
+                        && i.InvoiceDate <= dateTo);
+
+        if (supplierId.HasValue)
+            query = query.Where(i => i.SupplierId == supplierId.Value);
+
+        var invoicesCount = await query.CountAsync();
+        var totalPayments = await query.SumAsync(i => (decimal?)i.TotalPayments) ?? 0m;
+        var totalUsd = await query.SumAsync(i => (decimal?)i.TotalUsd) ?? 0m;
+        var totalProfit = await query.SumAsync(i => (decimal?)i.TotalProfit) ?? 0m;
+
+        var invoices = await query
+            .OrderByDescending(i => i.InvoiceDate)
+            .ThenByDescending(i => i.Id)
+            .Select(i => new
+            {
+                i.Id,
+                i.InvoiceNo,
+                i.InvoiceDate,
+                SupplierName = i.Supplier != null ? i.Supplier.Name : null,
+                i.TotalUsd,
+                i.TotalProfit
+            })
+            .ToListAsync();
+
+        var daily = await query
+            .GroupBy(i => i.InvoiceDate)
+            .Select(g => new
+            {
+                date = g.Key,
+                profit = g.Sum(i => i.TotalProfit)
+            })
+            .OrderBy(x => x.date)
+            .ToListAsync();
+
+        return Ok(new
+        {
+            dateFrom,
+            dateTo,
+            supplierId,
+            stats = new { invoicesCount, totalPayments, totalUsd, totalProfit },
+            invoices,
+            daily
         });
     }
 
