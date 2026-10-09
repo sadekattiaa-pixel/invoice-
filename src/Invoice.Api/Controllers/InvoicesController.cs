@@ -87,7 +87,7 @@ public class InvoicesController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>جلب فاتورة واحدة بكل بياناتها.</summary>
+    /// <summary>جلب فاتورة واحدة بكل بياناتها (بدون علاقات دائرية).</summary>
     [HttpGet("{id:long}")]
     public async Task<ActionResult> GetById(long id)
     {
@@ -97,12 +97,91 @@ public class InvoicesController : ControllerBase
             .Include(i => i.Payments)
             .Include(i => i.Discounts)
             .Include(i => i.Expenses)
+            .AsNoTracking()
             .FirstOrDefaultAsync(i => i.Id == id);
 
         if (invoice == null)
             return NotFound(new { message = "الفاتورة غير موجودة." });
 
-        return Ok(invoice);
+        // نبني كائنًا بسيطًا بدون back-references لتفادي الدورات
+        var response = new
+        {
+            invoice.Id,
+            invoice.InvoiceNo,
+            invoice.SupplierInvoiceNo,
+            invoice.SupplierId,
+            Supplier = invoice.Supplier == null ? null : new
+            {
+                invoice.Supplier.Id,
+                invoice.Supplier.Code,
+                invoice.Supplier.Name,
+                invoice.Supplier.Address,
+                invoice.Supplier.Email,
+                invoice.Supplier.Phone
+            },
+            invoice.InvoiceDate,
+            invoice.Status,
+            invoice.TotalPayments,
+            invoice.TotalDiscounts,
+            invoice.NetPayments,
+            invoice.TotalExpenses,
+            invoice.NetCost,
+            invoice.TotalUsd,
+            invoice.ExchangeRate,
+            invoice.TotalSales,
+            invoice.TotalProfit,
+            invoice.ProfitMargin,
+            invoice.DisplayFields,
+            invoice.Notes,
+            invoice.Notes2,
+            invoice.ArchivedAt,
+            invoice.CreatedAt,
+            invoice.UpdatedAt,
+            Items = invoice.Items.OrderBy(it => it.LineNo).Select(it => new
+            {
+                it.Id,
+                it.ProductId,
+                ProductCode = it.Product != null ? it.Product.Code : null,
+                ProductName = it.Product != null ? it.Product.Name : null,
+                ProductCategory = it.Product != null ? it.Product.Category : null,
+                ProductPattern = it.Product != null ? it.Product.Pattern : null,
+                ProductImage = it.Product != null ? it.Product.LayoutImageFilename : null,
+                it.LineNo,
+                it.Quantity,
+                it.Pallet,
+                it.PurchaseUsd,
+                it.PurchaseDzd,
+                it.SaleDzd,
+                it.TotalUsd,
+                it.TotalDzd,
+                it.TotalSale,
+                it.UnitProfit,
+                it.TotalProfit
+            }).ToList(),
+            Payments = invoice.Payments.OrderBy(p => p.LineNo).Select(p => new
+            {
+                p.Id,
+                p.Label,
+                p.Amount,
+                p.LineNo
+            }).ToList(),
+            Discounts = invoice.Discounts.OrderBy(d => d.LineNo).Select(d => new
+            {
+                d.Id,
+                d.Label,
+                d.Amount,
+                d.LineNo
+            }).ToList(),
+            Expenses = invoice.Expenses.OrderBy(e => e.LineNo).Select(e => new
+            {
+                e.Id,
+                e.Label,
+                e.Amount,
+                e.LineNo
+            }).ToList()
+        };
+
+        return Ok(response);
     }
 
     /// <summary>الحصول على رقم الفاتورة التالي المتوقع.</summary>
@@ -138,12 +217,10 @@ public class InvoicesController : ControllerBase
     // إنشاء وتعديل
     // ============================================================
 
-    /// <summary>إنشاء فاتورة جديدة (مسودة).</summary>
     [HttpPost]
     public Task<ActionResult> Create([FromBody] InvoiceSaveRequest request)
         => SaveOrUpdateAsync(null, request);
 
-    /// <summary>تعديل مسودة موجودة.</summary>
     [HttpPut("{id:long}")]
     public Task<ActionResult> Update(long id, [FromBody] InvoiceSaveRequest request)
         => SaveOrUpdateAsync(id, request);
@@ -152,7 +229,6 @@ public class InvoicesController : ControllerBase
     // أرشفة
     // ============================================================
 
-    /// <summary>أرشفة فاتورة — بعدها لا تقبل التعديل.</summary>
     [HttpPost("{id:long}/archive")]
     public async Task<ActionResult> Archive(long id, [FromBody] InvoiceSaveRequest request)
     {
@@ -165,12 +241,10 @@ public class InvoicesController : ControllerBase
             if (existing.Status == "Archived")
                 return BadRequest(new { message = "الفاتورة مؤرشفة بالفعل." });
 
-            // نحفظ أي تعديل على المسودة أولًا
             var saveResult = await SaveOrUpdateAsync(id, request);
             if (saveResult is not OkObjectResult)
                 return saveResult;
 
-            // نُعيد التحميل ونؤرشف
             var invoice = await _db.Invoices.FindAsync(id);
             if (invoice == null)
                 return NotFound(new { message = "الفاتورة غير موجودة." });
@@ -199,7 +273,6 @@ public class InvoicesController : ControllerBase
     // تكرار
     // ============================================================
 
-    /// <summary>إنشاء نسخة مسودة من فاتورة موجودة.</summary>
     [HttpPost("{id:long}/duplicate")]
     public async Task<ActionResult> Duplicate(long id)
     {
@@ -208,6 +281,7 @@ public class InvoicesController : ControllerBase
             .Include(i => i.Payments)
             .Include(i => i.Discounts)
             .Include(i => i.Expenses)
+            .AsNoTracking()
             .FirstOrDefaultAsync(i => i.Id == id);
 
         if (original == null)
@@ -250,7 +324,6 @@ public class InvoicesController : ControllerBase
         if (invoice == null)
             return NotFound(new { message = "الفاتورة غير موجودة." });
 
-        // الحذف يُسلسل تلقائيًا إلى البنود والمدفوعات والخصومات والمصاريف.
         _db.Invoices.Remove(invoice);
         await _db.SaveChangesAsync();
 
@@ -265,8 +338,6 @@ public class InvoicesController : ControllerBase
     {
         try
         {
-            // ========= التحقق =========
-
             if (request.SupplierId <= 0)
                 return BadRequest(new { message = "المورد مطلوب." });
 
@@ -286,11 +357,7 @@ public class InvoicesController : ControllerBase
             if (missing.Count > 0)
                 return BadRequest(new { message = $"الأصناف التالية غير موجودة: {string.Join(", ", missing)}" });
 
-            // ========= الحساب =========
-
             var calc = RunCalculation(request);
-
-            // ========= بدء معاملة =========
 
             await using var transaction = await _db.Database.BeginTransactionAsync();
 
@@ -298,7 +365,6 @@ public class InvoicesController : ControllerBase
 
             if (id.HasValue)
             {
-                // ----- تعديل مسودة -----
                 var existing = await _db.Invoices
                     .Include(i => i.Items)
                     .Include(i => i.Payments)
@@ -317,7 +383,6 @@ public class InvoicesController : ControllerBase
                 ApplyCalculationToHeader(invoice, request, calc);
                 invoice.UpdatedAt = DateTime.UtcNow;
 
-                // احذف البنود القديمة قبل إعادة الإدراج
                 _db.InvoiceItems.RemoveRange(invoice.Items);
                 _db.InvoicePayments.RemoveRange(invoice.Payments);
                 _db.InvoiceDiscounts.RemoveRange(invoice.Discounts);
@@ -327,7 +392,6 @@ public class InvoicesController : ControllerBase
             }
             else
             {
-                // ----- إنشاء جديد -----
                 var invoiceNo = await GenerateInvoiceNumberAsync();
 
                 invoice = new InvoiceEntity
@@ -341,8 +405,6 @@ public class InvoicesController : ControllerBase
                 _db.Invoices.Add(invoice);
                 await _db.SaveChangesAsync();
             }
-
-            // ========= إدراج البنود والمدفوعات وغيرها =========
 
             AddChildren(invoice.Id, calc, request);
 
@@ -368,7 +430,6 @@ public class InvoicesController : ControllerBase
         }
     }
 
-    /// <summary>ينفّذ الحساب من الطلب عبر InvoiceCalculator.</summary>
     private static InvoiceCalculationResult RunCalculation(InvoiceSaveRequest request)
     {
         var items = request.Items.Select(i => new InvoiceItemInput
@@ -387,7 +448,6 @@ public class InvoicesController : ControllerBase
             request.Expenses.Select(e => e.Amount).ToList());
     }
 
-    /// <summary>ينسخ قيم الطلب والحساب إلى رأس الفاتورة.</summary>
     private static void ApplyCalculationToHeader(
         InvoiceEntity invoice,
         InvoiceSaveRequest request,
@@ -410,7 +470,6 @@ public class InvoicesController : ControllerBase
         invoice.Notes2 = request.Notes2;
     }
 
-    /// <summary>يضيف البنود والمدفوعات والخصومات والمصاريف.</summary>
     private void AddChildren(long invoiceId, InvoiceCalculationResult calc, InvoiceSaveRequest request)
     {
         var lineNo = 1;
@@ -471,7 +530,6 @@ public class InvoicesController : ControllerBase
         }
     }
 
-    /// <summary>يولّد رقم فاتورة جديد بالشكل INV-YYYY-NNNN.</summary>
     private async Task<string> GenerateInvoiceNumberAsync()
     {
         var year = DateTime.UtcNow.Year;
