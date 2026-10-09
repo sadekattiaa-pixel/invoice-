@@ -19,7 +19,7 @@ public class ReportsController : ControllerBase
     }
 
     // ============================================================
-    // Dashboard KPIs
+    // 1) Dashboard KPIs
     // ============================================================
 
     /// <summary>
@@ -31,7 +31,6 @@ public class ReportsController : ControllerBase
     {
         var (from, to) = GetPeriodRange(period);
 
-        // الفواتير المؤرشفة فقط تدخل في الإحصائيات
         var baseQuery = _db.Invoices
             .Where(i => i.Status == "Archived" && i.InvoiceDate >= from && i.InvoiceDate <= to);
 
@@ -41,10 +40,7 @@ public class ReportsController : ControllerBase
         var totalProfit = await baseQuery.SumAsync(i => (decimal?)i.TotalProfit) ?? 0m;
         var totalSales = await baseQuery.SumAsync(i => (decimal?)i.TotalSales) ?? 0m;
 
-        // عدد الفواتير المسودة (بلا اعتبار للفترة، لأنها قيد العمل)
         var openInvoices = await _db.Invoices.CountAsync(i => i.Status == "Draft");
-
-        // عدد الموردين والأصناف الإجمالي
         var totalSuppliers = await _db.Suppliers.CountAsync();
         var totalProducts = await _db.Products.CountAsync();
 
@@ -53,23 +49,95 @@ public class ReportsController : ControllerBase
             period,
             from,
             to,
-            invoices = new
+            invoices = new { total = totalInvoices, drafts = openInvoices },
+            amounts = new { totalPayments, totalUsd, totalSales, totalProfit },
+            catalog = new { suppliers = totalSuppliers, products = totalProducts }
+        });
+    }
+
+    // ============================================================
+    // 2) تقرير المورد
+    // ============================================================
+
+    /// <summary>
+    /// تقرير مفصّل عن مورد واحد: إحصائيات + فواتير + اتجاه شهري.
+    /// period: today / week / month / quarter / year / all
+    /// </summary>
+    [HttpGet("supplier/{supplierId:int}")]
+    public async Task<ActionResult> GetSupplierReport(
+        int supplierId,
+        [FromQuery] string period = "year")
+    {
+        var supplier = await _db.Suppliers.FindAsync(supplierId);
+        if (supplier == null)
+            return NotFound(new { message = "المورد غير موجود." });
+
+        var (from, to) = GetPeriodRange(period);
+
+        var invoicesQuery = _db.Invoices
+            .Where(i => i.SupplierId == supplierId
+                        && i.Status == "Archived"
+                        && i.InvoiceDate >= from
+                        && i.InvoiceDate <= to);
+
+        // إحصائيات
+        var invoicesCount = await invoicesQuery.CountAsync();
+        var totalPayments = await invoicesQuery.SumAsync(i => (decimal?)i.TotalPayments) ?? 0m;
+        var totalUsd = await invoicesQuery.SumAsync(i => (decimal?)i.TotalUsd) ?? 0m;
+        var totalProfit = await invoicesQuery.SumAsync(i => (decimal?)i.TotalProfit) ?? 0m;
+
+        // قائمة الفواتير
+        var invoices = await invoicesQuery
+            .OrderByDescending(i => i.InvoiceDate)
+            .ThenByDescending(i => i.Id)
+            .Select(i => new
             {
-                total = totalInvoices,
-                drafts = openInvoices
+                i.Id,
+                i.InvoiceNo,
+                i.SupplierInvoiceNo,
+                i.InvoiceDate,
+                i.TotalUsd,
+                i.NetCost,
+                i.TotalProfit,
+                TotalQty = i.Items.Sum(it => (decimal?)it.Quantity) ?? 0m
+            })
+            .ToListAsync();
+
+        // الاتجاه الشهري
+        var monthly = await invoicesQuery
+            .GroupBy(i => new { i.InvoiceDate.Year, i.InvoiceDate.Month })
+            .Select(g => new
+            {
+                year = g.Key.Year,
+                month = g.Key.Month,
+                profit = g.Sum(i => i.TotalProfit)
+            })
+            .OrderBy(x => x.year).ThenBy(x => x.month)
+            .ToListAsync();
+
+        return Ok(new
+        {
+            supplier = new
+            {
+                supplier.Id,
+                supplier.Code,
+                supplier.Name,
+                supplier.Phone,
+                supplier.Email,
+                supplier.Address
             },
-            amounts = new
+            period,
+            from,
+            to,
+            stats = new
             {
+                invoicesCount,
                 totalPayments,
                 totalUsd,
-                totalSales,
                 totalProfit
             },
-            catalog = new
-            {
-                suppliers = totalSuppliers,
-                products = totalProducts
-            }
+            invoices,
+            monthly
         });
     }
 
@@ -77,7 +145,6 @@ public class ReportsController : ControllerBase
     // دوال مساعدة
     // ============================================================
 
-    /// <summary>يُرجع نطاق التاريخ بحسب الفترة المختارة.</summary>
     private static (DateOnly from, DateOnly to) GetPeriodRange(string period)
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -103,7 +170,7 @@ public class ReportsController : ControllerBase
             case "year":
                 from = new DateOnly(today.Year, 1, 1);
                 break;
-            default: // "all"
+            default:
                 from = new DateOnly(1900, 1, 1);
                 break;
         }
