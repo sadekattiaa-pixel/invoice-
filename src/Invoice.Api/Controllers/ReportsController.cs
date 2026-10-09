@@ -248,11 +248,6 @@ public class ReportsController : ControllerBase
     // 5) تقرير تغيّر الأسعار
     // ============================================================
 
-    /// <summary>
-    /// تقرير تغيّر أسعار صنف معيّن عبر الفواتير المؤرشفة.
-    /// يُرجع كل صف بمعلومات الفاتورة وسعري الشراء والبيع،
-    /// مع نسبة التغيّر مقارنة بالصف السابق.
-    /// </summary>
     [HttpGet("price-changes/{productId:int}")]
     public async Task<ActionResult> GetPriceChangesReport(
         int productId,
@@ -264,7 +259,6 @@ public class ReportsController : ControllerBase
 
         var (from, to) = GetPeriodRange(period);
 
-        // جلب كل بنود الفواتير المؤرشفة لهذا الصنف
         var rows = await _db.InvoiceItems
             .Include(ii => ii.Invoice).ThenInclude(i => i!.Supplier)
             .Where(ii => ii.ProductId == productId
@@ -284,7 +278,6 @@ public class ReportsController : ControllerBase
             })
             .ToListAsync();
 
-        // نحسب التغيّر بين كل صف والسابق
         var changes = new List<object>();
         decimal? prevPurchase = null;
         decimal? prevSale = null;
@@ -315,7 +308,6 @@ public class ReportsController : ControllerBase
             prevSale = r.saleDzd;
         }
 
-        // إحصائيات أول/آخر سعر
         var firstRow = rows.FirstOrDefault();
         var lastRow = rows.LastOrDefault();
 
@@ -340,6 +332,173 @@ public class ReportsController : ControllerBase
                 lastSale = lastRow?.saleDzd ?? 0m
             },
             changes
+        });
+    }
+
+    // ============================================================
+    // 6) الأكثر ربحية
+    // ============================================================
+
+    /// <summary>
+    /// أعلى الأصناف ربحية.
+    /// topN = 0 يعني كل الأصناف.
+    /// category = "" يعني كل التصنيفات.
+    /// </summary>
+    [HttpGet("most-profitable")]
+    public async Task<ActionResult> GetMostProfitableReport(
+        [FromQuery] string period = "year",
+        [FromQuery] string? category = null,
+        [FromQuery] int topN = 10)
+    {
+        var (from, to) = GetPeriodRange(period);
+
+        var itemsQuery = _db.InvoiceItems
+            .Include(ii => ii.Invoice)
+            .Include(ii => ii.Product)
+            .Where(ii => ii.Invoice != null
+                        && ii.Invoice.Status == "Archived"
+                        && ii.Invoice.InvoiceDate >= from
+                        && ii.Invoice.InvoiceDate <= to);
+
+        if (!string.IsNullOrWhiteSpace(category))
+            itemsQuery = itemsQuery.Where(ii => ii.Product != null && ii.Product.Category == category);
+
+        // التجميع حسب الصنف
+        var grouped = await itemsQuery
+            .GroupBy(ii => new
+            {
+                ii.ProductId,
+                ProductCode = ii.Product != null ? ii.Product.Code : "",
+                ProductName = ii.Product != null ? ii.Product.Name : "",
+                ProductCategory = ii.Product != null ? ii.Product.Category : "",
+                ProductPattern = ii.Product != null ? ii.Product.Pattern : null
+            })
+            .Select(g => new
+            {
+                id = g.Key.ProductId,
+                code = g.Key.ProductCode,
+                name = g.Key.ProductName,
+                category = g.Key.ProductCategory,
+                pattern = g.Key.ProductPattern,
+                totalQty = g.Sum(x => x.Quantity),
+                totalSales = g.Sum(x => x.TotalSale),
+                totalProfit = g.Sum(x => x.TotalProfit)
+            })
+            .OrderByDescending(x => x.totalProfit)
+            .ToListAsync();
+
+        // نطبّق topN بعد جلب القائمة (لأننا نحتاج حساب الهامش لكل صنف أولاً)
+        var finalList = topN > 0 ? grouped.Take(topN).ToList() : grouped;
+
+        var products = finalList.Select(p => new
+        {
+            p.id,
+            p.code,
+            p.name,
+            p.category,
+            p.pattern,
+            p.totalQty,
+            p.totalSales,
+            p.totalProfit,
+            margin = p.totalSales > 0m ? (p.totalProfit / p.totalSales) * 100m : 0m
+        }).ToList();
+
+        // الإحصائيات العامة (على كل الأصناف بغض النظر عن topN)
+        var totalProfitAll = grouped.Sum(p => p.totalProfit);
+        var productsCount = grouped.Count;
+        var avgMarginAll = products.Any() ? products.Average(p => p.margin) : 0m;
+        var topProfit = grouped.FirstOrDefault()?.totalProfit ?? 0m;
+
+        return Ok(new
+        {
+            period,
+            from,
+            to,
+            category,
+            topN,
+            stats = new
+            {
+                totalProfit = totalProfitAll,
+                productsCount,
+                avgMargin = avgMarginAll,
+                topProfit
+            },
+            products
+        });
+    }
+
+    // ============================================================
+    // 7) الأكثر مبيعًا
+    // ============================================================
+
+    /// <summary>
+    /// الأصناف الأكثر مبيعًا (بالكمية).
+    /// topN = 0 يعني كل الأصناف.
+    /// category = "" يعني كل التصنيفات.
+    /// </summary>
+    [HttpGet("best-selling")]
+    public async Task<ActionResult> GetBestSellingReport(
+        [FromQuery] string period = "year",
+        [FromQuery] string? category = null,
+        [FromQuery] int topN = 10)
+    {
+        var (from, to) = GetPeriodRange(period);
+
+        var itemsQuery = _db.InvoiceItems
+            .Include(ii => ii.Invoice)
+            .Include(ii => ii.Product)
+            .Where(ii => ii.Invoice != null
+                        && ii.Invoice.Status == "Archived"
+                        && ii.Invoice.InvoiceDate >= from
+                        && ii.Invoice.InvoiceDate <= to);
+
+        if (!string.IsNullOrWhiteSpace(category))
+            itemsQuery = itemsQuery.Where(ii => ii.Product != null && ii.Product.Category == category);
+
+        var grouped = await itemsQuery
+            .GroupBy(ii => new
+            {
+                ii.ProductId,
+                ProductCode = ii.Product != null ? ii.Product.Code : "",
+                ProductName = ii.Product != null ? ii.Product.Name : "",
+                ProductCategory = ii.Product != null ? ii.Product.Category : "",
+                ProductPattern = ii.Product != null ? ii.Product.Pattern : null
+            })
+            .Select(g => new
+            {
+                id = g.Key.ProductId,
+                code = g.Key.ProductCode,
+                name = g.Key.ProductName,
+                category = g.Key.ProductCategory,
+                pattern = g.Key.ProductPattern,
+                totalQty = g.Sum(x => x.Quantity),
+                totalSales = g.Sum(x => x.TotalSale),
+                invoicesCount = g.Select(x => x.InvoiceId).Distinct().Count()
+            })
+            .OrderByDescending(x => x.totalQty)
+            .ToListAsync();
+
+        var finalList = topN > 0 ? grouped.Take(topN).ToList() : grouped;
+
+        var totalQtyAll = grouped.Sum(p => p.totalQty);
+        var totalSalesAll = grouped.Sum(p => p.totalSales);
+        var topQty = grouped.FirstOrDefault()?.totalQty ?? 0m;
+
+        return Ok(new
+        {
+            period,
+            from,
+            to,
+            category,
+            topN,
+            stats = new
+            {
+                totalQty = totalQtyAll,
+                totalSales = totalSalesAll,
+                topQty,
+                productsCount = grouped.Count
+            },
+            products = finalList
         });
     }
 
