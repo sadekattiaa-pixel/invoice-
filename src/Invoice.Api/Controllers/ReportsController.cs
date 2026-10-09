@@ -190,9 +190,6 @@ public class ReportsController : ControllerBase
     // 4) تقرير الفترة
     // ============================================================
 
-    /// <summary>
-    /// تقرير بين تاريخين: إحصائيات + قائمة فواتير + أرباح يومية.
-    /// </summary>
     [HttpGet("period")]
     public async Task<ActionResult> GetPeriodReport(
         [FromQuery] DateOnly dateFrom,
@@ -244,6 +241,105 @@ public class ReportsController : ControllerBase
             stats = new { invoicesCount, totalPayments, totalUsd, totalProfit },
             invoices,
             daily
+        });
+    }
+
+    // ============================================================
+    // 5) تقرير تغيّر الأسعار
+    // ============================================================
+
+    /// <summary>
+    /// تقرير تغيّر أسعار صنف معيّن عبر الفواتير المؤرشفة.
+    /// يُرجع كل صف بمعلومات الفاتورة وسعري الشراء والبيع،
+    /// مع نسبة التغيّر مقارنة بالصف السابق.
+    /// </summary>
+    [HttpGet("price-changes/{productId:int}")]
+    public async Task<ActionResult> GetPriceChangesReport(
+        int productId,
+        [FromQuery] string period = "year")
+    {
+        var product = await _db.Products.FindAsync(productId);
+        if (product == null)
+            return NotFound(new { message = "الصنف غير موجود." });
+
+        var (from, to) = GetPeriodRange(period);
+
+        // جلب كل بنود الفواتير المؤرشفة لهذا الصنف
+        var rows = await _db.InvoiceItems
+            .Include(ii => ii.Invoice).ThenInclude(i => i!.Supplier)
+            .Where(ii => ii.ProductId == productId
+                        && ii.Invoice != null
+                        && ii.Invoice.Status == "Archived"
+                        && ii.Invoice.InvoiceDate >= from
+                        && ii.Invoice.InvoiceDate <= to)
+            .OrderBy(ii => ii.Invoice!.InvoiceDate)
+            .ThenBy(ii => ii.Id)
+            .Select(ii => new
+            {
+                date = ii.Invoice!.InvoiceDate,
+                invoiceNo = ii.Invoice.InvoiceNo,
+                supplierName = ii.Invoice.Supplier != null ? ii.Invoice.Supplier.Name : null,
+                purchaseUsd = ii.PurchaseUsd,
+                saleDzd = ii.SaleDzd
+            })
+            .ToListAsync();
+
+        // نحسب التغيّر بين كل صف والسابق
+        var changes = new List<object>();
+        decimal? prevPurchase = null;
+        decimal? prevSale = null;
+
+        foreach (var r in rows)
+        {
+            decimal? changePurchase = null;
+            decimal? changeSale = null;
+
+            if (prevPurchase.HasValue && prevPurchase.Value > 0m)
+                changePurchase = ((r.purchaseUsd - prevPurchase.Value) / prevPurchase.Value) * 100m;
+
+            if (prevSale.HasValue && prevSale.Value > 0m)
+                changeSale = ((r.saleDzd - prevSale.Value) / prevSale.Value) * 100m;
+
+            changes.Add(new
+            {
+                r.date,
+                r.invoiceNo,
+                r.supplierName,
+                r.purchaseUsd,
+                r.saleDzd,
+                changePurchase,
+                changeSale
+            });
+
+            prevPurchase = r.purchaseUsd;
+            prevSale = r.saleDzd;
+        }
+
+        // إحصائيات أول/آخر سعر
+        var firstRow = rows.FirstOrDefault();
+        var lastRow = rows.LastOrDefault();
+
+        return Ok(new
+        {
+            product = new
+            {
+                product.Id,
+                product.Code,
+                product.Name,
+                product.Category,
+                product.Pattern
+            },
+            period,
+            from,
+            to,
+            stats = new
+            {
+                firstPurchase = firstRow?.purchaseUsd ?? 0m,
+                lastPurchase = lastRow?.purchaseUsd ?? 0m,
+                firstSale = firstRow?.saleDzd ?? 0m,
+                lastSale = lastRow?.saleDzd ?? 0m
+            },
+            changes
         });
     }
 
