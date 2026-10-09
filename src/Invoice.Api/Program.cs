@@ -1,25 +1,35 @@
+using Invoice.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// تسجيل DbContext مع سلسلة الاتصال من appsettings.json
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+// تفعيل Controllers
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+
+// Swagger لواجهة تجريبية
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// تفعيل Swagger في بيئة التطوير فقط
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
+// إعادة التوجيه إلى HTTPS
 app.UseHttpsRedirection();
 
+// تفعيل التحقق من الصلاحيات (سنستخدمه لاحقًا)
 app.UseAuthorization();
 
+// ربط الـ Controllers
 app.MapControllers();
 
 app.Run();
