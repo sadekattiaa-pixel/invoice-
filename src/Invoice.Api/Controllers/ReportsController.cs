@@ -22,10 +22,6 @@ public class ReportsController : ControllerBase
     // 1) Dashboard KPIs
     // ============================================================
 
-    /// <summary>
-    /// إحصائيات سريعة للوحة التحكم.
-    /// period: today / week / month / quarter / year / all
-    /// </summary>
     [HttpGet("dashboard")]
     public async Task<ActionResult> GetDashboard([FromQuery] string period = "year")
     {
@@ -59,10 +55,6 @@ public class ReportsController : ControllerBase
     // 2) تقرير المورد
     // ============================================================
 
-    /// <summary>
-    /// تقرير مفصّل عن مورد واحد: إحصائيات + فواتير + اتجاه شهري.
-    /// period: today / week / month / quarter / year / all
-    /// </summary>
     [HttpGet("supplier/{supplierId:int}")]
     public async Task<ActionResult> GetSupplierReport(
         int supplierId,
@@ -80,13 +72,11 @@ public class ReportsController : ControllerBase
                         && i.InvoiceDate >= from
                         && i.InvoiceDate <= to);
 
-        // إحصائيات
         var invoicesCount = await invoicesQuery.CountAsync();
         var totalPayments = await invoicesQuery.SumAsync(i => (decimal?)i.TotalPayments) ?? 0m;
         var totalUsd = await invoicesQuery.SumAsync(i => (decimal?)i.TotalUsd) ?? 0m;
         var totalProfit = await invoicesQuery.SumAsync(i => (decimal?)i.TotalProfit) ?? 0m;
 
-        // قائمة الفواتير
         var invoices = await invoicesQuery
             .OrderByDescending(i => i.InvoiceDate)
             .ThenByDescending(i => i.Id)
@@ -103,7 +93,6 @@ public class ReportsController : ControllerBase
             })
             .ToListAsync();
 
-        // الاتجاه الشهري
         var monthly = await invoicesQuery
             .GroupBy(i => new { i.InvoiceDate.Year, i.InvoiceDate.Month })
             .Select(g => new
@@ -129,13 +118,77 @@ public class ReportsController : ControllerBase
             period,
             from,
             to,
-            stats = new
+            stats = new { invoicesCount, totalPayments, totalUsd, totalProfit },
+            invoices,
+            monthly
+        });
+    }
+
+    // ============================================================
+    // 3) تقرير الأرباح
+    // ============================================================
+
+    /// <summary>
+    /// تقرير الأرباح العام: إحصائيات + قائمة الفواتير + اتجاه شهري.
+    /// period: today / week / month / quarter / year / all
+    /// supplierId: اختياري — يقصر التقرير على مورد واحد.
+    /// </summary>
+    [HttpGet("profit")]
+    public async Task<ActionResult> GetProfitReport(
+        [FromQuery] string period = "year",
+        [FromQuery] int? supplierId = null)
+    {
+        var (from, to) = GetPeriodRange(period);
+
+        var query = _db.Invoices
+            .Where(i => i.Status == "Archived"
+                        && i.InvoiceDate >= from
+                        && i.InvoiceDate <= to);
+
+        if (supplierId.HasValue)
+            query = query.Where(i => i.SupplierId == supplierId.Value);
+
+        // إحصائيات
+        var invoicesCount = await query.CountAsync();
+        var totalSales = await query.SumAsync(i => (decimal?)i.TotalSales) ?? 0m;
+        var totalProfit = await query.SumAsync(i => (decimal?)i.TotalProfit) ?? 0m;
+        var avgMargin = await query.AverageAsync(i => (decimal?)i.ProfitMargin) ?? 0m;
+
+        // قائمة الفواتير مع اسم المورد
+        var invoices = await query
+            .OrderByDescending(i => i.InvoiceDate)
+            .ThenByDescending(i => i.Id)
+            .Select(i => new
             {
-                invoicesCount,
-                totalPayments,
-                totalUsd,
-                totalProfit
-            },
+                i.Id,
+                i.InvoiceNo,
+                i.InvoiceDate,
+                SupplierName = i.Supplier != null ? i.Supplier.Name : null,
+                i.TotalSales,
+                i.TotalProfit,
+                i.ProfitMargin
+            })
+            .ToListAsync();
+
+        // الاتجاه الشهري
+        var monthly = await query
+            .GroupBy(i => new { i.InvoiceDate.Year, i.InvoiceDate.Month })
+            .Select(g => new
+            {
+                year = g.Key.Year,
+                month = g.Key.Month,
+                profit = g.Sum(i => i.TotalProfit)
+            })
+            .OrderBy(x => x.year).ThenBy(x => x.month)
+            .ToListAsync();
+
+        return Ok(new
+        {
+            period,
+            from,
+            to,
+            supplierId,
+            stats = new { invoicesCount, totalSales, totalProfit, avgMargin },
             invoices,
             monthly
         });
