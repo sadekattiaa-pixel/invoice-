@@ -76,20 +76,17 @@ public class ProductsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<Product>> Create([FromBody] Product product)
     {
-        // 1) التحقق من التصنيف
         if (!AllowedCategories.Contains(product.Category))
         {
             return BadRequest(new { message = "تصنيف غير معروف. المسموح: Batteries, Car Tires, Truck Tires." });
         }
 
-        // 2) التحقق من وجود المورد
         var supplierExists = await _db.Suppliers.AnyAsync(s => s.Id == product.SupplierId);
         if (!supplierExists)
         {
             return BadRequest(new { message = "المورد غير موجود." });
         }
 
-        // 3) قواعد الأعمال حسب التصنيف
         if (product.Category == "Batteries")
         {
             if (string.IsNullOrWhiteSpace(product.Code))
@@ -97,11 +94,9 @@ public class ProductsController : ControllerBase
                 return BadRequest(new { message = "كود البطارية مطلوب." });
             }
 
-            // البطارية: الكود هو نفسه الاسم (قاعدة المشروع الأصلي)
             product.Name = product.Code.Trim();
             product.Pattern = null;
 
-            // منع تكرار الاسم (بلا اعتبار لحالة الأحرف أو المسافات)
             var existingName = await _db.Products
                 .Where(p => p.Category == "Batteries")
                 .Select(p => p.Name)
@@ -115,7 +110,6 @@ public class ProductsController : ControllerBase
         }
         else
         {
-            // الإطارات: تحتاج اسم + نقشة
             if (string.IsNullOrWhiteSpace(product.Name))
             {
                 return BadRequest(new { message = "اسم الإطار مطلوب." });
@@ -125,11 +119,9 @@ public class ProductsController : ControllerBase
                 return BadRequest(new { message = "نقشة الإطار مطلوبة." });
             }
 
-            // توليد كود فريد (hash) لتفادي التكرار
             product.Code = GenerateTireCode(product);
         }
 
-        // 4) منع تكرار الكود
         var codeExists = await _db.Products.AnyAsync(p => p.Code == product.Code);
         if (codeExists)
         {
@@ -180,7 +172,6 @@ public class ProductsController : ControllerBase
             product.Name = product.Code.Trim();
             product.Pattern = null;
 
-            // التحقق من عدم التكرار مع أصناف أخرى
             var others = await _db.Products
                 .Where(p => p.Category == "Batteries" && p.Id != id)
                 .Select(p => p.Name)
@@ -201,7 +192,6 @@ public class ProductsController : ControllerBase
             product.Code = GenerateTireCode(product);
         }
 
-        // التحقق من عدم تكرار الكود مع أصناف أخرى
         var codeTaken = await _db.Products.AnyAsync(p => p.Code == product.Code && p.Id != id);
         if (codeTaken)
         {
@@ -268,12 +258,16 @@ public class ProductsController : ControllerBase
         return string.Join(" ", parts).ToLowerInvariant();
     }
 
-    /// <summary>توليد كود فريد للإطار على أساس (التصنيف + الاسم + النقشة + المورد).</summary>
+    /// <summary>
+    /// توليد كود فريد للإطار على أساس (التصنيف + الاسم + النقشة + المورد).
+    /// الطول: "TIRE-" + 32 حرفًا hex = 37 حرفًا (أقل من حد 50).
+    /// </summary>
     private static string GenerateTireCode(Product product)
     {
         var identity = $"{product.Category}|{NormalizeName(product.Name)}|{NormalizeName(product.Pattern ?? "")}|{product.SupplierId}";
         var bytes = System.Text.Encoding.UTF8.GetBytes(identity);
         var hash = System.Security.Cryptography.SHA256.HashData(bytes);
-        return "TIRE-" + Convert.ToHexString(hash).ToLowerInvariant();
+        var hex = Convert.ToHexString(hash).ToLowerInvariant();
+        return "TIRE-" + hex[..32];
     }
 }
