@@ -1,6 +1,7 @@
 using Invoice.Application.Dtos;
 using Invoice.Infrastructure.Exporters;
 using Invoice.Infrastructure.Persistence;
+using Invoice.Infrastructure.Services;
 using Invoice.Infrastructure.Storage;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -8,18 +9,24 @@ using Microsoft.EntityFrameworkCore;
 namespace Invoice.Api.Controllers;
 
 /// <summary>
-/// نقاط نهاية API لتصدير الفواتير إلى PDF و Excel.
+/// نقاط نهاية API لتصدير الفواتير والتقارير إلى PDF و Excel.
 /// </summary>
 [ApiController]
 [Route("api/exports")]
 public class ExportsController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly ReportDataService _reportService;
 
-    public ExportsController(AppDbContext db)
+    public ExportsController(AppDbContext db, ReportDataService reportService)
     {
         _db = db;
+        _reportService = reportService;
     }
+
+    // ============================================================
+    // تصدير الفواتير
+    // ============================================================
 
     /// <summary>تنزيل فاتورة كملف PDF.</summary>
     [HttpGet("invoice/{id:long}/pdf")]
@@ -71,6 +78,100 @@ public class ExportsController : ControllerBase
         }
     }
 
+    // ============================================================
+    // تصدير التقارير
+    // ============================================================
+
+    /// <summary>
+    /// تصدير أي تقرير إلى PDF.
+    /// الأنواع المدعومة: dashboard, supplier, profit, period, price-changes,
+    /// most-profitable, best-selling.
+    /// </summary>
+    [HttpGet("report/{type}/pdf")]
+    public async Task<IActionResult> ExportReportPdf(
+        string type,
+        [FromQuery] string period = "year",
+        [FromQuery] int? supplierId = null,
+        [FromQuery] int? productId = null,
+        [FromQuery] string? category = null,
+        [FromQuery] int topN = 10,
+        [FromQuery] DateOnly? dateFrom = null,
+        [FromQuery] DateOnly? dateTo = null)
+    {
+        var report = await _reportService.BuildAsync(
+            type, period, supplierId, productId, category, topN, dateFrom, dateTo);
+
+        if (report == null)
+            return BadRequest(new
+            {
+                message = "نوع التقرير غير معروف أو معامل مطلوب ناقص.",
+                supported = new[]
+                {
+                    "dashboard", "supplier", "profit", "period",
+                    "price-changes", "most-profitable", "best-selling"
+                }
+            });
+
+        var company = await LoadCompanyInfoAsync();
+        var (filePath, fileName) = PrepareTempFile($"report-{type}", "pdf");
+
+        try
+        {
+            ReportPdfExporter.Export(report, company, filePath);
+            var bytes = await System.IO.File.ReadAllBytesAsync(filePath);
+            System.IO.File.Delete(filePath);
+            return File(bytes, "application/pdf", fileName);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "فشل توليد PDF للتقرير.", detail = ex.Message });
+        }
+    }
+
+    /// <summary>تصدير أي تقرير إلى Excel.</summary>
+    [HttpGet("report/{type}/excel")]
+    public async Task<IActionResult> ExportReportExcel(
+        string type,
+        [FromQuery] string period = "year",
+        [FromQuery] int? supplierId = null,
+        [FromQuery] int? productId = null,
+        [FromQuery] string? category = null,
+        [FromQuery] int topN = 10,
+        [FromQuery] DateOnly? dateFrom = null,
+        [FromQuery] DateOnly? dateTo = null)
+    {
+        var report = await _reportService.BuildAsync(
+            type, period, supplierId, productId, category, topN, dateFrom, dateTo);
+
+        if (report == null)
+            return BadRequest(new
+            {
+                message = "نوع التقرير غير معروف أو معامل مطلوب ناقص.",
+                supported = new[]
+                {
+                    "dashboard", "supplier", "profit", "period",
+                    "price-changes", "most-profitable", "best-selling"
+                }
+            });
+
+        var company = await LoadCompanyInfoAsync();
+        var (filePath, fileName) = PrepareTempFile($"report-{type}", "xlsx");
+
+        try
+        {
+            ReportExcelExporter.Export(report, company, filePath);
+            var bytes = await System.IO.File.ReadAllBytesAsync(filePath);
+            System.IO.File.Delete(filePath);
+            return File(bytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                fileName);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "فشل توليد Excel للتقرير.", detail = ex.Message });
+        }
+    }
+
     // ========= دوال مساعدة =========
 
     private async Task<Domain.Entities.Invoice?> LoadInvoiceAsync(long id)
@@ -93,7 +194,6 @@ public class ExportsController : ControllerBase
 
         var company = CompanyInfoDto.FromSettings(settings);
 
-        // حمّل الشعار من القرص إن وُجد مسار
         if (!string.IsNullOrWhiteSpace(company.LogoPath))
         {
             var bytes = await LogoStorage.ReadBytesAsync(company.LogoPath);
@@ -107,11 +207,11 @@ public class ExportsController : ControllerBase
         return company;
     }
 
-    private static (string filePath, string fileName) PrepareTempFile(string invoiceNo, string extension)
+    private static (string filePath, string fileName) PrepareTempFile(string baseName, string extension)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "InvoiceExports");
         Directory.CreateDirectory(tempDir);
-        var safeName = string.Join("_", invoiceNo.Split(Path.GetInvalidFileNameChars()));
+        var safeName = string.Join("_", baseName.Split(Path.GetInvalidFileNameChars()));
         var fileName = $"{safeName}_{DateTime.Now:yyyyMMddHHmmss}.{extension}";
         var filePath = Path.Combine(tempDir, fileName);
         return (filePath, fileName);

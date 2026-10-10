@@ -1,4 +1,5 @@
 using Invoice.Infrastructure.Persistence;
+using Invoice.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -6,6 +7,9 @@ var builder = WebApplication.CreateBuilder(args);
 // تسجيل DbContext مع سلسلة الاتصال من appsettings.json
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// تسجيل خدمات التصدير
+builder.Services.AddScoped<ReportDataService>();
 
 // تفعيل Controllers
 builder.Services.AddControllers();
