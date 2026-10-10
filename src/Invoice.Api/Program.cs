@@ -1,4 +1,5 @@
 using System.Text;
+using Invoice.Api.Data;
 using Invoice.Api.Services;
 using Invoice.Infrastructure.Persistence;
 using Invoice.Infrastructure.Services;
@@ -67,7 +68,6 @@ builder.Services.AddSwaggerGen(options =>
         Description = "CostProfitApp Invoice API with JWT authentication."
     });
 
-    // تعريف مخطط Bearer حتى يستطيع Swagger UI إرسال التوكن
     var bearerScheme = new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -92,6 +92,14 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
+// ============ Seed default data ============
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+    await DataSeeder.SeedAsync(db, hasher);
+}
+
 // ============ Pipeline ============
 if (app.Environment.IsDevelopment())
 {
@@ -101,7 +109,6 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// ترتيب حرج: Authentication قبل Authorization
 app.UseAuthentication();
 app.UseAuthorization();
 
