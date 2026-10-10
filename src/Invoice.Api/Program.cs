@@ -12,7 +12,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 // ============ DbContext ============
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sql => sql.CommandTimeout(120)));
 
 // ============ JWT Settings ============
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
