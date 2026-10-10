@@ -24,6 +24,13 @@ public class AppDbContext : DbContext
     public DbSet<InvoiceDiscount> InvoiceDiscounts => Set<InvoiceDiscount>();
     public DbSet<InvoiceExpense> InvoiceExpenses => Set<InvoiceExpense>();
 
+    // ========= جداول المصادقة =========
+    public DbSet<User> Users => Set<User>();
+    public DbSet<Role> Roles => Set<Role>();
+    public DbSet<Permission> Permissions => Set<Permission>();
+    public DbSet<UserRole> UserRoles => Set<UserRole>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -173,6 +180,84 @@ public class AppDbContext : DbContext
                   .WithMany(i => i.Expenses)
                   .HasForeignKey(e => e.InvoiceId)
                   .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ========= User =========
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.ToTable("Users");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Username).IsRequired().HasMaxLength(100);
+            entity.HasIndex(e => e.Username).IsUnique();
+            entity.Property(e => e.PasswordHash).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.FullName).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Email).HasMaxLength(200);
+            entity.Property(e => e.Phone).HasMaxLength(50);
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.RowVersion).IsRowVersion();
+        });
+
+        // ========= Role =========
+        modelBuilder.Entity<Role>(entity =>
+        {
+            entity.ToTable("Roles");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
+            entity.HasIndex(e => e.Name).IsUnique();
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.IsSystem).HasDefaultValue(false);
+            entity.Property(e => e.RowVersion).IsRowVersion();
+        });
+
+        // ========= Permission =========
+        modelBuilder.Entity<Permission>(entity =>
+        {
+            entity.ToTable("Permissions");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Code).IsRequired().HasMaxLength(150);
+            entity.HasIndex(e => e.Code).IsUnique();
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.Category).HasMaxLength(100);
+            entity.HasIndex(e => e.Category);
+        });
+
+        // ========= UserRole (Many-to-Many) =========
+        modelBuilder.Entity<UserRole>(entity =>
+        {
+            entity.ToTable("UserRoles");
+            entity.HasKey(e => new { e.UserId, e.RoleId });
+
+            entity.HasOne(e => e.User)
+                  .WithMany(u => u.UserRoles)
+                  .HasForeignKey(e => e.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Role)
+                  .WithMany(r => r.UserRoles)
+                  .HasForeignKey(e => e.RoleId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => e.RoleId);
+        });
+
+        // ========= RolePermission (Many-to-Many) =========
+        modelBuilder.Entity<RolePermission>(entity =>
+        {
+            entity.ToTable("RolePermissions");
+            entity.HasKey(e => new { e.RoleId, e.PermissionId });
+
+            entity.HasOne(e => e.Role)
+                  .WithMany(r => r.RolePermissions)
+                  .HasForeignKey(e => e.RoleId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Permission)
+                  .WithMany(p => p.RolePermissions)
+                  .HasForeignKey(e => e.PermissionId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => e.PermissionId);
         });
     }
 }
