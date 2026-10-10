@@ -33,8 +33,8 @@ PDF	QuestPDF 2026.9.1 (Community) — يدعم العربية + الشعار
 Excel	ClosedXML 0.105.1
 dotnet-ef	8.0.31 (أداة عامة)
 الواجهة	WinForms (code-first — لا مصمم مرئي)
-المصادقة	متعدد المستخدمين بأدوار (لم يُنفّذ بعد)
-النقل	HTTP + API Key + JWT (لم يُنفّذ بعد)
+المصادقة	متعدد المستخدمين بأدوار (قيد التنفيذ — انظر القسم 17)
+النقل	HTTP + API Key + JWT (قيد التنفيذ)
 الفرع الرئيسي	main (على Git)
 الشركة الناشرة	Alintilqa Programming & Digital Solutions
 
@@ -68,11 +68,11 @@ Invoice-CSharp/
 │   │       ├── InvoiceSaveRequest.cs
 │   │       ├── InvoiceItemRequest.cs
 │   │       ├── InvoiceAmountRequest.cs
-│   │       ├── CompanyInfoDto.cs          ← جديد
-│   │       ├── ReportColumn.cs            ← جديد
-│   │       ├── ReportRow.cs               ← جديد
-│   │       ├── ReportSummaryItem.cs       ← جديد
-│   │       └── ReportTableDto.cs          ← جديد
+│   │       ├── CompanyInfoDto.cs
+│   │       ├── ReportColumn.cs
+│   │       ├── ReportRow.cs
+│   │       ├── ReportSummaryItem.cs
+│   │       └── ReportTableDto.cs
 │   │
 │   ├── Invoice.Infrastructure/       (class library)
 │   │   ├── Persistence/
@@ -83,14 +83,14 @@ Invoice-CSharp/
 │   │   │       ├── 20261009230747_AddSettingsTable.cs
 │   │   │       └── AppDbContextModelSnapshot.cs
 │   │   ├── Exporters/
-│   │   │   ├── InvoicePdfExporter.cs      ← معدَّل (2 صفحات + شعار)
-│   │   │   ├── InvoiceExcelExporter.cs    ← معدَّل (ورقتان + شعار)
-│   │   │   ├── ReportPdfExporter.cs       ← جديد
-│   │   │   └── ReportExcelExporter.cs     ← جديد
-│   │   ├── Storage/                       ← جديد
-│   │   │   └── LogoStorage.cs             ← جديد
-│   │   └── Services/                      ← جديد
-│   │       └── ReportDataService.cs       ← جديد
+│   │   │   ├── InvoicePdfExporter.cs
+│   │   │   ├── InvoiceExcelExporter.cs
+│   │   │   ├── ReportPdfExporter.cs
+│   │   │   └── ReportExcelExporter.cs
+│   │   ├── Storage/
+│   │   │   └── LogoStorage.cs
+│   │   └── Services/
+│   │       └── ReportDataService.cs
 │   │
 │   ├── Invoice.Api/                  (webapi)
 │   │   ├── Controllers/
@@ -98,9 +98,9 @@ Invoice-CSharp/
 │   │   │   ├── ProductsController.cs
 │   │   │   ├── InvoicesController.cs
 │   │   │   ├── ReportsController.cs
-│   │   │   ├── ExportsController.cs       ← معدَّل (تقارير PDF/Excel)
-│   │   │   └── SettingsController.cs      ← معدَّل (رفع/استرجاع الشعار)
-│   │   ├── Program.cs                     ← معدَّل (تسجيل ReportDataService)
+│   │   │   ├── ExportsController.cs
+│   │   │   └── SettingsController.cs
+│   │   ├── Program.cs
 │   │   ├── appsettings.json
 │   │   └── appsettings.Development.json
 │   │
@@ -135,7 +135,7 @@ Connection String:
 text
 Server=localhost\SQLEXPRESS;Database=InvoiceDb;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true
 
-4.2 الجداول (9 جداول)
+4.2 الجداول (9 جداول + Auth قيد الإضافة)
 الجدول	الوصف
 Settings	مفتاح/قيمة (لبيانات الشركة والإعدادات + مسار الشعار)
 Suppliers	الموردون
@@ -153,7 +153,7 @@ __EFMigrationsHistory	سجل EF (نظامي)
 - company_phone
 - company_email
 - company_website
-- company_logo_path  ← يُضاف تلقائيًا عند رفع شعار
+- company_logo_path
 
 4.4 علاقات مهمة
 Products.SupplierId → Suppliers.Id (Restrict)
@@ -255,8 +255,8 @@ Exports (/api/exports)
 Method	Path	الوصف
 GET	invoice/{id}/pdf	تنزيل فاتورة PDF
 GET	invoice/{id}/excel	تنزيل فاتورة Excel
-GET	report/{type}/pdf	تصدير تقرير PDF (7 أنواع)         ← جديد
-GET	report/{type}/excel	تصدير تقرير Excel (7 أنواع)       ← جديد
+GET	report/{type}/pdf	تصدير تقرير PDF (7 أنواع)
+GET	report/{type}/excel	تصدير تقرير Excel (7 أنواع)
 
 أنواع التقارير المدعومة في report/{type}:
 dashboard, supplier, profit, period, price-changes, most-profitable, best-selling
@@ -267,9 +267,9 @@ Settings (/api/settings)
 Method	Path	الوصف
 GET	/	كل الإعدادات
 PUT	/	حفظ دفعة مفتاح/قيمة
-POST	/logo	رفع شعار الشركة (multipart، حقل "file")   ← جديد
-GET	/logo	استرجاع شعار الشركة الحالي                  ← جديد
-DELETE	/logo	حذف شعار الشركة الحالي                       ← جديد
+POST	/logo	رفع شعار الشركة (multipart، حقل "file")
+GET	/logo	استرجاع شعار الشركة الحالي
+DELETE	/logo	حذف شعار الشركة الحالي
 
 7. مكان تخزين الشعار
 text
@@ -279,9 +279,9 @@ text
 8. حالة Git
 الفرع: main
 
-آخر Commit: 2ab8e29 (Add PDF/Excel report exporters for all 7 report types)
+آخر Commit: (سيُحدَّث بعد commit HANDOFF)
 
-عدد Commits: ~24
+عدد Commits: ~25
 
 لا ريموت (GitHub لم يُربط بعد)
 
@@ -306,7 +306,7 @@ git status
    - Excel: ورقتان بنفس الترتيب
 
 9.2 نواقص عامة
-لا مصادقة (Auth/JWT) بعد.
+لا مصادقة (Auth/JWT) بعد — قيد التنفيذ.
 
 لا Audit Log بعد (رغم أنه ضمن الخطة).
 
@@ -320,13 +320,7 @@ git status
 
 10. أولويات العمل القادم
 المسار المتفق عليه (أولوية عالية)
-Auth + JWT + Users + Roles
-
-جداول: Users, Roles, Permissions, RolePermissions
-
-Endpoints: login, refresh, me, change-password
-
-Middleware للتحقق
+Auth + JWT + Users + Roles ← قيد التنفيذ، انظر القسم 17
 
 WinForms Desktop (الخطوة الكبيرة)
 
@@ -414,7 +408,7 @@ git add . ; git commit -m "message"
 
 ✅ اللغة: عربية للشرح، إنجليزية للكود.
 
-✅ عند تعديل ملف، أعطِ أولًا أمر `code path` لفتحه.
+✅ عند تعديل ملف، أعطِ أولًا أمر code path لفتحه.
 
 ✅ إن كان التعديل على جزء من ملف، اذكر القسم بدقة، ثم أعطِ الملف كاملًا.
 
@@ -459,11 +453,33 @@ API — Settings	✅ مستقر + شعار	✅
 Desktop	⚪ لم يُعدّل	❌
 التقييم العام: الخادم جاهز وظيفيًا للإنتاج في بيئة LAN، ينقصه المصادقة. تطبيق سطح المكتب لم يبدأ.
 
-17. نقطة الاستئناف الموصى بها
-اعمل على نقطة 10: Auth + JWT + Users + Roles.
+17. نقطة الاستئناف الحالية (Auth + JWT)
+اعمل على: Auth + JWT + Users + Roles.
 
-الخطوة التالية الدقيقة: تصميم جداول Users/Roles/Permissions وإنشاء Migration.
+الخطوات المخطط لها (10 خطوات):
+1. إنشاء كيانات User, Role, Permission, UserRole, RolePermission في Invoice.Domain/Entities/
+2. تهيئة العلاقات في AppDbContext (Many-to-Many + RowVersion + فهارس)
+3. Migration جديد
+4. تثبيت حزم JWT في Invoice.Api (Microsoft.AspNetCore.Authentication.JwtBearer)
+5. إضافة إعدادات JWT في appsettings.json (Key, Issuer, Audience, Duration)
+6. إنشاء JwtService (توليد توكن + التحقق)
+7. إنشاء AuthController (login, refresh, me, change-password)
+8. تفعيل Middleware المصادقة في Program.cs
+9. Seed لمستخدم admin افتراضي + صلاحيات أساسية
+10. اختبار عبر Swagger
+
+الحالة الحالية:
+- الخادم مستقر ويعمل.
+- 25 commit على main.
+- آخر commit: (سيُحدَّث بعد commit HANDOFF).
+- لا توجد كيانات Auth بعد (لم ننشئ أي ملف).
+
+القرارات التقنية المتفق عليها للمصادقة:
+- تخزين كلمات المرور: BCrypt.Net-Next (يجب تثبيته لاحقًا).
+- Tokens: JWT (Access + Refresh).
+- الأدوار: Admin, Accountant, Viewer (سيتم تعريفها في Seed).
+- الصلاحيات: صيغة resource.action (مثال: suppliers.read, invoices.create).
 
 نهاية HANDOFF.
 
-عند بدء جلسة جديدة، اقرأ هذا الملف بالكامل وابدأ من القسم 17.
+عند بدء جلسة جديدة، اقرأ هذا الملف بالكامل وابدأ من القسم 17 (الخطوة 1).
