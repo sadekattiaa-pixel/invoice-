@@ -1,4 +1,4 @@
-using Invoice.Domain.Entities;
+using Invoice.Application.Dtos;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -8,6 +8,8 @@ namespace Invoice.Infrastructure.Exporters;
 
 /// <summary>
 /// يُولّد ملف PDF للفاتورة بالعربية باستخدام QuestPDF.
+/// صفحة 1: الشعار + بيانات الشركة + بيانات المورد + الأصناف + الملاحظات
+/// صفحة 2: المدفوعات + الخصومات + المصاريف + الملخص
 /// </summary>
 public static class InvoicePdfExporter
 {
@@ -19,12 +21,13 @@ public static class InvoicePdfExporter
     }
 
     /// <summary>ينشئ ملف PDF للفاتورة في المسار المحدد.</summary>
-    public static void Export(InvoiceEntity invoice, string filePath)
+    public static void Export(InvoiceEntity invoice, CompanyInfoDto company, string filePath)
     {
         var items = invoice.Items.OrderBy(i => i.LineNo).ToList();
         var payments = invoice.Payments.OrderBy(p => p.LineNo).ToList();
         var discounts = invoice.Discounts.OrderBy(d => d.LineNo).ToList();
         var expenses = invoice.Expenses.OrderBy(e => e.LineNo).ToList();
+        var supplier = invoice.Supplier;
 
         Document.Create(container =>
         {
@@ -34,40 +37,89 @@ public static class InvoicePdfExporter
                 page.Margin(1.5f, Unit.Centimetre);
                 page.DefaultTextStyle(x => x.FontSize(11).FontFamily("Arial"));
 
-                // ========= الترويسة =========
-                page.Header().Column(col =>
+                // ===================================================
+                // ============ المحتوى (صفحة 1 + صفحة 2) ============
+                // ===================================================
+                page.Content().Column(contentCol =>
                 {
-                    col.Item().AlignCenter().Text("فاتورة")
-                        .FontSize(20).Bold();
+                    // ============================================
+                    // ========== الصفحة 1 ==========
+                    // ============================================
 
-                    col.Item().PaddingTop(4).AlignCenter()
-                        .Text($"رقم الفاتورة: {invoice.InvoiceNo}")
-                        .FontSize(12);
-
-                    if (!string.IsNullOrWhiteSpace(invoice.SupplierInvoiceNo))
+                    // ----- الشعار (يسار، بدون إطار) + بيانات الشركة (يمين) -----
+                    contentCol.Item().Row(row =>
                     {
-                        col.Item().AlignCenter()
-                            .Text($"رقم فاتورة المورد: {invoice.SupplierInvoiceNo}")
-                            .FontSize(10);
-                    }
+                        // الشعار — بدون إطار، محاذى للأعلى
+                        if (company.LogoBytes != null && company.LogoBytes.Length > 0)
+                        {
+                            row.ConstantItem(120)
+                                .AlignTop().AlignLeft()
+                                .Height(90)
+                                .Image(company.LogoBytes).FitArea();
+                        }
+                        else
+                        {
+                            row.ConstantItem(120);
+                        }
 
-                    col.Item().PaddingTop(8).Row(row =>
-                    {
-                        row.RelativeItem().Text($"التاريخ: {invoice.InvoiceDate:yyyy-MM-dd}");
-                        row.RelativeItem().AlignRight()
-                            .Text($"المورد: {invoice.Supplier?.Name ?? "—"}");
+                        // بيانات الشركة (يمين) — القيم فقط، محاذاة للأعلى
+                        row.RelativeItem().PaddingLeft(15).AlignTop().Column(col =>
+                        {
+                            if (!string.IsNullOrWhiteSpace(company.Name))
+                                col.Item().Text(company.Name).FontSize(16).Bold();
+
+                            if (!string.IsNullOrWhiteSpace(company.Address))
+                                col.Item().Text(company.Address).FontSize(10);
+
+                            if (!string.IsNullOrWhiteSpace(company.Phone))
+                                col.Item().Text(company.Phone).FontSize(10);
+
+                            if (!string.IsNullOrWhiteSpace(company.Email))
+                                col.Item().Text(company.Email).FontSize(10);
+
+                            if (!string.IsNullOrWhiteSpace(company.Website))
+                                col.Item().Text(company.Website).FontSize(10);
+                        });
                     });
-                });
 
-                // ========= المحتوى =========
-                page.Content().PaddingVertical(10).Column(col =>
-                {
-                    col.Spacing(8);
+                    // ----- بيانات المورد (يسار) + بيانات الفاتورة (يمين) -----
+                    contentCol.Item().PaddingTop(20).Row(row =>
+                    {
+                        // المورد (يسار) — القيم فقط، محاذاة للأعلى
+                        row.RelativeItem().AlignTop().Column(col =>
+                        {
+                            if (supplier != null)
+                            {
+                                if (!string.IsNullOrWhiteSpace(supplier.Name))
+                                    col.Item().Text(supplier.Name).FontSize(10);
+                                if (!string.IsNullOrWhiteSpace(supplier.Address))
+                                    col.Item().Text(supplier.Address).FontSize(10);
+                                if (!string.IsNullOrWhiteSpace(supplier.Phone))
+                                    col.Item().Text(supplier.Phone).FontSize(10);
+                                if (!string.IsNullOrWhiteSpace(supplier.Email))
+                                    col.Item().Text(supplier.Email).FontSize(10);
+                            }
+                        });
 
-                    // جدول البنود
-                    col.Item().Text("الأصناف").FontSize(13).Bold();
+                        // الفاتورة (يمين) — القيم فقط، محاذاة يمين + أعلى
+                        row.RelativeItem().AlignTop().Column(col =>
+                        {
+                            col.Item().AlignRight()
+                                .Text(invoice.InvoiceDate.ToString("yyyy-MM-dd")).FontSize(10);
 
-                    col.Item().Table(table =>
+                            col.Item().AlignRight()
+                                .Text(invoice.InvoiceNo).FontSize(10);
+
+                            if (!string.IsNullOrWhiteSpace(invoice.SupplierInvoiceNo))
+                                col.Item().AlignRight()
+                                    .Text(invoice.SupplierInvoiceNo).FontSize(10);
+                        });
+                    });
+
+                    // ----- جدول الأصناف -----
+                    contentCol.Item().PaddingTop(20).Text("جدول الأصناف").FontSize(13).Bold();
+
+                    contentCol.Item().PaddingTop(6).Table(table =>
                     {
                         table.ColumnsDefinition(columns =>
                         {
@@ -84,6 +136,7 @@ public static class InvoicePdfExporter
                         {
                             void H(string text) =>
                                 header.Cell().Background(Colors.Grey.Lighten2)
+                                    .Border(0.5f).BorderColor(Colors.Black)
                                     .Padding(4).AlignCenter().Text(text).Bold().FontSize(10);
 
                             H("#");
@@ -98,7 +151,8 @@ public static class InvoicePdfExporter
                         foreach (var item in items)
                         {
                             void C(string text) =>
-                                table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2)
+                                table.Cell()
+                                    .Border(0.5f).BorderColor(Colors.Black)
                                     .Padding(4).AlignCenter().Text(text).FontSize(10);
 
                             C(item.LineNo.ToString());
@@ -111,11 +165,108 @@ public static class InvoicePdfExporter
                         }
                     });
 
-                    col.Item().PaddingTop(12).LineHorizontal(1).LineColor(Colors.Grey.Medium);
+                    // ----- ملاحظات -----
+                    if (!string.IsNullOrWhiteSpace(invoice.Notes))
+                    {
+                        contentCol.Item().PaddingTop(15).Text("ملاحظات").FontSize(12).Bold();
+                        contentCol.Item().PaddingTop(4).Text(invoice.Notes).FontSize(10);
+                    }
 
-                    col.Item().PaddingTop(8).Text("الملخص").FontSize(13).Bold();
+                    // ----- فاصل صفحات -----
+                    contentCol.Item().PageBreak();
 
-                    col.Item().Table(table =>
+                    // ============================================
+                    // ========== الصفحة 2 ==========
+                    // ============================================
+
+                    // ----- المدفوعات -----
+                    if (payments.Any())
+                    {
+                        contentCol.Item().Text("المدفوعات").FontSize(13).Bold();
+
+                        contentCol.Item().PaddingTop(6).Table(table =>
+                        {
+                            table.ColumnsDefinition(columns =>
+                            {
+                                columns.RelativeColumn(3);
+                                columns.RelativeColumn(2);
+                            });
+
+                            foreach (var p in payments)
+                            {
+                                table.Cell().Padding(3).Text(p.Label ?? "—").FontSize(10);
+                                table.Cell().Padding(3).AlignRight()
+                                    .Text($"{p.Amount:N2} د.ل").FontSize(10);
+                            }
+
+                            table.Cell().Padding(3).Text("الإجمالي").Bold().FontSize(10);
+                            table.Cell().Padding(3).AlignRight()
+                                .Text($"{invoice.TotalPayments:N2} د.ل").Bold().FontSize(10);
+                        });
+
+                        contentCol.Item().PaddingTop(12);
+                    }
+
+                    // ----- الخصومات -----
+                    if (discounts.Any())
+                    {
+                        contentCol.Item().Text("الخصومات").FontSize(13).Bold();
+
+                        contentCol.Item().PaddingTop(6).Table(table =>
+                        {
+                            table.ColumnsDefinition(columns =>
+                            {
+                                columns.RelativeColumn(3);
+                                columns.RelativeColumn(2);
+                            });
+
+                            foreach (var d in discounts)
+                            {
+                                table.Cell().Padding(3).Text(d.Label ?? "—").FontSize(10);
+                                table.Cell().Padding(3).AlignRight()
+                                    .Text($"{d.Amount:N2} د.ل").FontSize(10);
+                            }
+
+                            table.Cell().Padding(3).Text("الإجمالي").Bold().FontSize(10);
+                            table.Cell().Padding(3).AlignRight()
+                                .Text($"{invoice.TotalDiscounts:N2} د.ل").Bold().FontSize(10);
+                        });
+
+                        contentCol.Item().PaddingTop(12);
+                    }
+
+                    // ----- المصاريف -----
+                    if (expenses.Any())
+                    {
+                        contentCol.Item().Text("المصاريف").FontSize(13).Bold();
+
+                        contentCol.Item().PaddingTop(6).Table(table =>
+                        {
+                            table.ColumnsDefinition(columns =>
+                            {
+                                columns.RelativeColumn(3);
+                                columns.RelativeColumn(2);
+                            });
+
+                            foreach (var e in expenses)
+                            {
+                                table.Cell().Padding(3).Text(e.Label).FontSize(10);
+                                table.Cell().Padding(3).AlignRight()
+                                    .Text($"{e.Amount:N2} د.ل").FontSize(10);
+                            }
+
+                            table.Cell().Padding(3).Text("الإجمالي").Bold().FontSize(10);
+                            table.Cell().Padding(3).AlignRight()
+                                .Text($"{invoice.TotalExpenses:N2} د.ل").Bold().FontSize(10);
+                        });
+
+                        contentCol.Item().PaddingTop(12);
+                    }
+
+                    // ----- الملخص -----
+                    contentCol.Item().PaddingTop(8).Text("الملخص").FontSize(13).Bold();
+
+                    contentCol.Item().PaddingTop(6).Table(table =>
                     {
                         table.ColumnsDefinition(columns =>
                         {
@@ -145,35 +296,9 @@ public static class InvoicePdfExporter
                         Row("إجمالي الربح", $"{invoice.TotalProfit:N2} د.ل", bold: true);
                         Row("هامش الربح %", $"{invoice.ProfitMargin:N4} %");
                     });
-
-                    if (payments.Any())
-                    {
-                        col.Item().PaddingTop(10).Text("الدفعات").FontSize(12).Bold();
-                        foreach (var p in payments)
-                            col.Item().Text($"• {p.Label ?? "—"}: {p.Amount:N2} د.ل").FontSize(10);
-                    }
-
-                    if (discounts.Any())
-                    {
-                        col.Item().PaddingTop(6).Text("الخصومات").FontSize(12).Bold();
-                        foreach (var d in discounts)
-                            col.Item().Text($"• {d.Label ?? "—"}: {d.Amount:N2} د.ل").FontSize(10);
-                    }
-
-                    if (expenses.Any())
-                    {
-                        col.Item().PaddingTop(6).Text("المصاريف").FontSize(12).Bold();
-                        foreach (var e in expenses)
-                            col.Item().Text($"• {e.Label}: {e.Amount:N2} د.ل").FontSize(10);
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(invoice.Notes))
-                    {
-                        col.Item().PaddingTop(10).Text("ملاحظات").FontSize(12).Bold();
-                        col.Item().Text(invoice.Notes).FontSize(10);
-                    }
                 });
 
+                // ============ Footer: أرقام الصفحات ============
                 page.Footer().AlignCenter().Text(text =>
                 {
                     text.CurrentPageNumber();

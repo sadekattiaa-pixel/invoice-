@@ -1,5 +1,7 @@
+using Invoice.Application.Dtos;
 using Invoice.Infrastructure.Exporters;
 using Invoice.Infrastructure.Persistence;
+using Invoice.Infrastructure.Storage;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,11 +29,12 @@ public class ExportsController : ControllerBase
         if (invoice == null)
             return NotFound(new { message = "الفاتورة غير موجودة." });
 
+        var company = await LoadCompanyInfoAsync();
         var (filePath, fileName) = PrepareTempFile(invoice.InvoiceNo, "pdf");
 
         try
         {
-            InvoicePdfExporter.Export(invoice, filePath);
+            InvoicePdfExporter.Export(invoice, company, filePath);
             var bytes = await System.IO.File.ReadAllBytesAsync(filePath);
             System.IO.File.Delete(filePath);
             return File(bytes, "application/pdf", fileName);
@@ -50,11 +53,12 @@ public class ExportsController : ControllerBase
         if (invoice == null)
             return NotFound(new { message = "الفاتورة غير موجودة." });
 
+        var company = await LoadCompanyInfoAsync();
         var (filePath, fileName) = PrepareTempFile(invoice.InvoiceNo, "xlsx");
 
         try
         {
-            InvoiceExcelExporter.Export(invoice, filePath);
+            InvoiceExcelExporter.Export(invoice, company, filePath);
             var bytes = await System.IO.File.ReadAllBytesAsync(filePath);
             System.IO.File.Delete(filePath);
             return File(bytes,
@@ -79,6 +83,28 @@ public class ExportsController : ControllerBase
             .Include(i => i.Expenses)
             .AsNoTracking()
             .FirstOrDefaultAsync(i => i.Id == id);
+    }
+
+    private async Task<CompanyInfoDto> LoadCompanyInfoAsync()
+    {
+        var settings = await _db.Settings
+            .AsNoTracking()
+            .ToDictionaryAsync(s => s.Key, s => s.Value ?? "");
+
+        var company = CompanyInfoDto.FromSettings(settings);
+
+        // حمّل الشعار من القرص إن وُجد مسار
+        if (!string.IsNullOrWhiteSpace(company.LogoPath))
+        {
+            var bytes = await LogoStorage.ReadBytesAsync(company.LogoPath);
+            if (bytes != null && bytes.Length > 0)
+            {
+                company.LogoBytes = bytes;
+                company.LogoContentType = LogoStorage.GetContentType(company.LogoPath);
+            }
+        }
+
+        return company;
     }
 
     private static (string filePath, string fileName) PrepareTempFile(string invoiceNo, string extension)
