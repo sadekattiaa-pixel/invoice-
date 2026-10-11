@@ -33,10 +33,11 @@ PDF	QuestPDF 2026.9.1 (Community) — يدعم العربية + الشعار
 Excel	ClosedXML 0.105.1
 dotnet-ef	8.0.31 (أداة عامة)
 الواجهة	WinForms (code-first — لا مصمم مرئي)
-المصادقة	متعدد المستخدمين بأدوار (قيد التنفيذ — انظر القسم 17)
-النقل	HTTP + API Key + JWT (قيد التنفيذ)
+المصادقة	متعدد المستخدمين بأدوار — ✅ مُنفَّذ (JWT + BCrypt)
+النقل	HTTP + API Key + JWT
+حزم المصادقة	Microsoft.AspNetCore.Authentication.JwtBearer 8.0.11 + BCrypt.Net-Next 4.2.0
 الفرع الرئيسي	main (على Git)
-الشركة الناشرة	Alintilqa Programming & Digital Solutions
+الشركة الناشرة	Alintiqaa Programming & Digital Solutions
 
 3. البنية الحالية
 3.1 شجرة المجلدات
@@ -55,7 +56,12 @@ Invoice-CSharp/
 │   │       ├── InvoicePayment.cs
 │   │       ├── InvoiceDiscount.cs
 │   │       ├── InvoiceExpense.cs
-│   │       └── Settings.cs
+│   │       ├── Settings.cs
+│   │       ├── User.cs
+│   │       ├── Role.cs
+│   │       ├── Permission.cs
+│   │       ├── UserRole.cs
+│   │       └── RolePermission.cs
 │   │
 │   ├── Invoice.Application/          (class library)
 │   │   ├── Exceptions/
@@ -81,6 +87,7 @@ Invoice-CSharp/
 │   │   │   └── Migrations/
 │   │   │       ├── 20261009005315_InitialCreate.cs
 │   │   │       ├── 20261009230747_AddSettingsTable.cs
+│   │   │       ├── 20261010225958_AddAuthTables.cs
 │   │   │       └── AppDbContextModelSnapshot.cs
 │   │   ├── Exporters/
 │   │   │   ├── InvoicePdfExporter.cs
@@ -99,7 +106,23 @@ Invoice-CSharp/
 │   │   │   ├── InvoicesController.cs
 │   │   │   ├── ReportsController.cs
 │   │   │   ├── ExportsController.cs
-│   │   │   └── SettingsController.cs
+│   │   │   ├── SettingsController.cs
+│   │   │   └── AuthController.cs
+│   │   ├── Data/
+│   │   │   └── DataSeeder.cs
+│   │   ├── Dtos/
+│   │   │   └── Auth/
+│   │   │       ├── LoginRequest.cs
+│   │   │       ├── LoginResponse.cs
+│   │   │       ├── UserInfoDto.cs
+│   │   │       ├── RefreshRequest.cs
+│   │   │       └── ChangePasswordRequest.cs
+│   │   ├── Services/
+│   │   │   ├── JwtSettings.cs
+│   │   │   ├── IJwtService.cs
+│   │   │   ├── JwtService.cs
+│   │   │   ├── IPasswordHasher.cs
+│   │   │   └── BcryptPasswordHasher.cs
 │   │   ├── Program.cs
 │   │   ├── appsettings.json
 │   │   └── appsettings.Development.json
@@ -133,9 +156,11 @@ Tests           → كل المشروعات
 Connection String:
 
 text
-Server=localhost\SQLEXPRESS;Database=InvoiceDb;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true
+Server=localhost\SQLEXPRESS;Database=InvoiceDb;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true;Connect Timeout=120
 
-4.2 الجداول (9 جداول + Auth قيد الإضافة)
+ملاحظة: Connect Timeout=120 ضرورية — SQL Express يستغرق وقتًا في أول اتصال بعد بداية باردة.
+
+4.2 الجداول (14 جدولًا)
 الجدول	الوصف
 Settings	مفتاح/قيمة (لبيانات الشركة والإعدادات + مسار الشعار)
 Suppliers	الموردون
@@ -145,6 +170,11 @@ InvoiceItems	بنود الفواتير
 InvoicePayments	دفعات
 InvoiceDiscounts	خصومات
 InvoiceExpenses	مصاريف
+Users	المستخدمون
+Roles	الأدوار (Admin, Accountant, Viewer)
+Permissions	الصلاحيات (resource.action)
+UserRoles	ربط مستخدم-دور (Many-to-Many)
+RolePermissions	ربط دور-صلاحية (Many-to-Many)
 __EFMigrationsHistory	سجل EF (نظامي)
 
 4.3 مفاتيح Settings المستخدمة فعليًا
@@ -166,8 +196,18 @@ InvoiceItems.ProductId → Products.Id (Restrict)
 
 InvoicePayments/Discounts/Expenses.InvoiceId → Invoices.Id (Cascade)
 
+UserRoles.UserId → Users.Id (Cascade)
+
+UserRoles.RoleId → Roles.Id (Cascade)
+
+RolePermissions.RoleId → Roles.Id (Cascade)
+
+RolePermissions.PermissionId → Permissions.Id (Cascade)
+
 4.5 حقول RowVersion
-كل الجداول الرئيسية (Suppliers, Products, Invoices) بها RowVersion (SQL rowversion) لمنع تعارض التعديلات.
+الجداول التالية بها RowVersion (SQL rowversion):
+- Suppliers, Products, Invoices
+- Users, Roles
 
 5. قواعد العمل المُنفَّذة
 5.1 الأصناف
@@ -212,6 +252,19 @@ Percent: 4 منازل
 
 total_usd > 0.
 
+5.5 المصادقة والصلاحيات
+كلمات المرور: BCrypt (Work Factor = 12).
+
+التوكنات: JWT (HMAC-SHA256) — Access 60 دقيقة، Refresh 7 أيام.
+
+Claims محمولة: sub (Id), unique_name (Username), role (اسم الدور), permission (كود الصلاحية), full_name.
+
+الأدوار الافتراضية: Admin (كل الصلاحيات 23)، Accountant (16)، Viewer (6).
+
+الصلاحيات بصيغة resource.action (مثل suppliers.read, invoices.create).
+
+مستخدم admin افتراضي: admin / admin123 (يُنصح بتغييرها بعد أول دخول).
+
 6. API المُنفَّذ (كل النقاط مُختبَرة)
 Suppliers (/api/suppliers)
 Method	Path	الوصف
@@ -240,6 +293,13 @@ PUT	/{id}	تعديل مسودة
 POST	/{id}/archive	أرشفة
 POST	/{id}/duplicate	تكرار كمسودة جديدة
 DELETE	/{id}	حذف (cascade)
+
+Auth (/api/auth) — ✅ جديد
+Method	Path	Auth	الوصف
+POST	login	AllowAnonymous	تسجيل دخول (يرجع Access + Refresh + UserInfo)
+POST	refresh	AllowAnonymous	تجديد Access من Refresh Token
+GET	me	Authorize	بيانات المستخدم الحالي + أدواره + صلاحياته
+POST	change-password	Authorize	تغيير كلمة المرور
 
 Reports (/api/reports) — 7 نقاط
 Method	Path	الوصف
@@ -279,9 +339,9 @@ text
 8. حالة Git
 الفرع: main
 
-آخر Commit: (سيُحدَّث بعد commit HANDOFF)
+آخر Commit: يُحدَّث بعد commit HANDOFF
 
-عدد Commits: ~25
+عدد Commits: ~35
 
 لا ريموت (GitHub لم يُربط بعد)
 
@@ -301,14 +361,12 @@ git status
 
 ✅ حدود جدول Excel
 
-✅ إعادة ترتيب الملاحظات + إعادة ترتيب PDF/Excel بالكامل:
-   - PDF: صفحتان (صفحة 1: الترويسة + المورد + الأصناف + ملاحظات / صفحة 2: مدفوعات + خصومات + مصاريف + ملخص)
-   - Excel: ورقتان بنفس الترتيب
+✅ إعادة ترتيب الملاحظات + إعادة ترتيب PDF/Excel بالكامل
 
 9.2 نواقص عامة
-لا مصادقة (Auth/JWT) بعد — قيد التنفيذ.
+لا Audit Log بعد (رغم أنه ضمن الخطة) — مؤجَّل.
 
-لا Audit Log بعد (رغم أنه ضمن الخطة).
+لا Refresh Token Blacklist (لا يمكن إبطال Refresh قبل انتهائه) — مؤجَّل.
 
 لا اختبارات وحدة حقيقية (فقط smoke test للـ PDF).
 
@@ -318,17 +376,20 @@ git status
 
 لا حقل "موقع الكتروني" للمورد (Supplier) — فقط: Code/Name/Address/Email/Phone.
 
+لا توجد `[Authorize]` على نقاط الـ API القديمة (Suppliers/Products/Invoices...) — قابلة للإضافة لاحقًا.
+
+لا Policies مبنية على صلاحيات (resource.action) — قابلة للإضافة عبر `AddPolicy`.
+
 10. أولويات العمل القادم
-المسار المتفق عليه (أولوية عالية)
-Auth + JWT + Users + Roles ← قيد التنفيذ، انظر القسم 17
+المسار المتفق عليه
+~~Auth + JWT + Users + Roles~~ ✅ مكتمل
 
 WinForms Desktop (الخطوة الكبيرة)
+- ApiClient (HttpClient مركزي يحمل التوكن)
+- LoginForm + MainForm
+- 7 صفحات UserControl (Dashboard, Suppliers, Products, Invoice, Archive, Reports, Settings)
 
-ApiClient (HttpClient مركزي)
-
-LoginForm + MainForm
-
-7 صفحات UserControl (Dashboard, Suppliers, Products, Invoice, Archive, Reports, Settings)
+حماية نقاط الـ API القديمة بـ [Authorize] + Policies للصلاحيات
 
 Import من Excel
 
@@ -349,8 +410,6 @@ dotnet run --project src/Invoice.Api
 
 Swagger: http://localhost:5124/swagger
 
-مثال: http://localhost:5124/api/suppliers
-
 إيقاف الخادم
 text
 Ctrl + C   ← في الطرفية
@@ -359,7 +418,7 @@ Y          ← إن طُلب تأكيد
 بناء الحل
 text
 dotnet build Invoice.sln
-تنظيف كامل (عند الشك بمشاكل cache)
+تنظيف كامل
 text
 taskkill /F /IM dotnet.exe
 dotnet clean Invoice.sln
@@ -376,6 +435,14 @@ dotnet test tests/Invoice.Tests/Invoice.Tests.csproj --filter "FullyQualifiedNam
 تحقق من الجداول
 text
 sqlcmd -S localhost\SQLEXPRESS -E -d InvoiceDb -C -Q "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE' ORDER BY TABLE_NAME"
+فحص مستخدمي النظام
+text
+sqlcmd -S localhost\SQLEXPRESS -E -d InvoiceDb -C -Q "SELECT Id, Username, FullName, IsActive FROM Users"
+اختبار تسجيل دخول (PowerShell)
+text
+$body = @{ username = "admin"; password = "admin123" } | ConvertTo-Json
+$r = Invoke-WebRequest -Uri "http://localhost:5124/api/auth/login" -Method POST -ContentType "application/json" -Body $body
+$r.StatusCode
 حفظ في Git
 text
 git add . ; git commit -m "message"
@@ -385,11 +452,14 @@ git add . ; git commit -m "message"
 مورد	S-001 / مورد الاختبار الأول / طرابلس، ليبيا / 0910000000
 بطارية	id=1, BAT-100, Batteries, 100AH
 إطار	id=3, TIRE-9f4e..., Continental HDR2, Truck Tires
-فاتورة	id=1, INV-2026-0001, SUP-2026-001, مؤرشفة
+فاتورة	id=1, INV-2026-0001, SUP-2026-001، مؤرشفة
 بيانات الفاتورة	10 وحدات BAT-100، شراء 50$، بيع 750 د.ل
 النتائج	total_usd=500، net_cost=6300، total_sales=7500، profit=1200، margin=16%
 إعدادات الشركة	اسم/عنوان/هاتف/إيميل/موقع (تم إدخالها)
 شعار الشركة	مرفوع في %LOCALAPPDATA%\CostProfitApp\Uploads\company\logo.png
+مستخدم النظام	admin / admin123 (دور Admin، 23 صلاحية)
+أدوار النظام	Admin (23)، Accountant (16)، Viewer (6)
+صلاحيات النظام	23 صلاحية بصيغة resource.action
 
 13. قواعد التعامل مع المساعد (مهمة!)
 ✅ خطوة واحدة في كل رسالة.
@@ -450,36 +520,40 @@ API — Reports	✅ 7 تقارير	✅
 API — Exports (فواتير)	✅ PDF + Excel	✅
 API — Exports (تقارير)	✅ PDF + Excel (7 أنواع)	✅
 API — Settings	✅ مستقر + شعار	✅
+API — Auth	✅ مُنفَّذ (login/refresh/me/change-password)	✅
+DataSeeder	✅ ينشئ admin + 3 أدوار + 23 صلاحية	✅
 Desktop	⚪ لم يُعدّل	❌
-التقييم العام: الخادم جاهز وظيفيًا للإنتاج في بيئة LAN، ينقصه المصادقة. تطبيق سطح المكتب لم يبدأ.
 
-17. نقطة الاستئناف الحالية (Auth + JWT)
-اعمل على: Auth + JWT + Users + Roles.
+التقييم العام: الخادم جاهز وظيفيًا للإنتاج في بيئة LAN مع مصادقة JWT. تطبيق سطح المكتب لم يبدأ بعد.
 
-الخطوات المخطط لها (10 خطوات):
-1. إنشاء كيانات User, Role, Permission, UserRole, RolePermission في Invoice.Domain/Entities/
-2. تهيئة العلاقات في AppDbContext (Many-to-Many + RowVersion + فهارس)
-3. Migration جديد
-4. تثبيت حزم JWT في Invoice.Api (Microsoft.AspNetCore.Authentication.JwtBearer)
-5. إضافة إعدادات JWT في appsettings.json (Key, Issuer, Audience, Duration)
-6. إنشاء JwtService (توليد توكن + التحقق)
-7. إنشاء AuthController (login, refresh, me, change-password)
-8. تفعيل Middleware المصادقة في Program.cs
-9. Seed لمستخدم admin افتراضي + صلاحيات أساسية
-10. اختبار عبر Swagger
+17. نقطة الاستئناف الحالية
+الحالة: Auth + JWT مكتمل بنجاح ✅
 
-الحالة الحالية:
-- الخادم مستقر ويعمل.
-- 25 commit على main.
-- آخر commit: (سيُحدَّث بعد commit HANDOFF).
-- لا توجد كيانات Auth بعد (لم ننشئ أي ملف).
+ما تم إنجازه (10 خطوات):
+1. ✅ كيانات المصادقة في Domain (User, Role, Permission, UserRole, RolePermission)
+2. ✅ تهيئة العلاقات في AppDbContext
+3. ✅ Migration AddAuthTables + تطبيقه على القاعدة
+4. ✅ تثبيت Microsoft.AspNetCore.Authentication.JwtBearer 8.0.11
+5. ✅ إعدادات JWT في appsettings.json
+6. ✅ JwtService (توليد Access + Refresh + التحقق)
+7. ✅ DTOs + BcryptPasswordHasher
+8. ✅ AuthController (login, refresh, me, change-password)
+9. ✅ تفعيل Middleware في Program.cs
+10. ✅ DataSeeder + اختبار كامل عبر Swagger
 
-القرارات التقنية المتفق عليها للمصادقة:
-- تخزين كلمات المرور: BCrypt.Net-Next (يجب تثبيته لاحقًا).
-- Tokens: JWT (Access + Refresh).
-- الأدوار: Admin, Accountant, Viewer (سيتم تعريفها في Seed).
-- الصلاحيات: صيغة resource.action (مثال: suppliers.read, invoices.create).
+القرارات التقنية المطبَّقة:
+- تخزين كلمات المرور: BCrypt.Net-Next 4.2.0 (Work Factor = 12)
+- Tokens: JWT (Access 60 دقيقة، Refresh 7 أيام)
+- الأدوار: Admin (23)، Accountant (16)، Viewer (6)
+- الصلاحيات: صيغة resource.action
+- مستخدم افتراضي: admin / admin123
+
+المهمة القادمة (المسار المتفق عليه):
+WinForms Desktop — إنشاء ApiClient + LoginForm + MainForm + 7 صفحات UserControl.
+
+قبل ذلك (اختياري لكن مُوصى به):
+إضافة [Authorize] + Policies على نقاط API القديمة لحمايتها بالصلاحيات.
 
 نهاية HANDOFF.
 
-عند بدء جلسة جديدة، اقرأ هذا الملف بالكامل وابدأ من القسم 17 (الخطوة 1).
+عند بدء جلسة جديدة، اقرأ هذا الملف بالكامل وابدأ من القسم 17 (نقطة الاستئناف).
