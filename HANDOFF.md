@@ -46,7 +46,7 @@ dotnet-ef                   8.0.31 (أداة عامة)
 حزمة JWT                    Microsoft.AspNetCore.Authentication.JwtBearer 8.0.11
 حزمة BCrypt                 BCrypt.Net-Next 4.2.0
 الفرع الرئيسي               main
-الريموت                     لا يوجد (GitHub لم يُربط بعد)
+الريموت                     origin → https://github.com/sadekattiaa-pixel/invoice-.git
 
 ═══════════════════════════════════════════════════════════════
 3. البنية الحالية
@@ -120,7 +120,7 @@ Invoice-CSharp/
 │   │   ├── Data/
 │   │   │   └── DataSeeder.cs            ← 3 مستخدمين (admin/accountant/viewer)
 │   │   ├── Security/
-│   │   │   └── Permissions.cs           ← جديد (23 صلاحية كـ const)
+│   │   │   └── Permissions.cs           ← 23 صلاحية كـ const
 │   │   ├── Dtos/
 │   │   │   └── Auth/
 │   │   │       ├── LoginRequest.cs
@@ -498,15 +498,19 @@ Request مع Bearer توكن صالح
 ═══════════════════════════════════════════════════════════════
 
 الفرع:               main
-آخر Commit:          يُحدَّث بعد commit HANDOFF
-عدد Commits:         ~36
-ريموت:               لا يوجد (GitHub لم يُربط بعد)
+الريموت:             origin → https://github.com/sadekattiaa-pixel/invoice-.git
+آخر Commit محلي:     6346503 — Ignore build_output.txt and untrack it from repo
+آخر Commit على الريموت: 22938c4 — Update HANDOFF.md: Auth+JWT completed
+حالة المزامنة:       متقدم بـ 3 commits على origin/main (تحتاج git push)
+عدد Commits:         ~39
+هوية Git المحلية:    ADNAN / adnan@alintiqaa.local
 
 أوامر Git المستخدمة
 ───────────────────
 git add . ; git commit -m "message"
 git log --oneline -N
 git status
+git remote -v
 git show --stat HEAD
 
 ═══════════════════════════════════════════════════════════════
@@ -571,6 +575,7 @@ git show --stat HEAD
 - نقل الاختبارات إلى مشروع tests/ (بعد إضافة اختبارات حقيقية).
 - تحسين الأداء.
 - Refresh Token Blacklist.
+- git push للـ commits المحلية (3 commits).
 
 ═══════════════════════════════════════════════════════════════
 13. الأوامر السريعة المرجعية
@@ -647,6 +652,10 @@ try { Invoke-WebRequest -Uri "http://localhost:5124/api/suppliers" -UseBasicPars
 حفظ في Git
 ──────────
 git add . ; git commit -m "message"
+
+دفع إلى GitHub
+──────────────
+git push origin main
 
 ═══════════════════════════════════════════════════════════════
 14. بيانات الاختبار الحالية في قاعدة البيانات
