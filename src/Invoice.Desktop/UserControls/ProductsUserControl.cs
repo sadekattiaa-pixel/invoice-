@@ -3,12 +3,12 @@ using Invoice.Desktop.Services;
 namespace Invoice.Desktop.UserControls;
 
 /// <summary>
-/// صفحة الأصناف — قائمة + بحث + فلترة + إضافة + تعديل + حذف.
-/// - بطارية: كود + Ah + L + W + H + Oh + Layout + صورة + Pallet.
-/// - إطار: اسم + نقشة.
+/// صفحة الأصناف — قائمة + بحث + فلترة + إضافة + تعديل + حذف + اختيار الأعمدة.
 /// </summary>
 public class ProductsUserControl : UserControl
 {
+    private const string GridKey = "Products";
+
     private DataGridView _grid = null!;
     private TextBox _txtSearch = null!;
     private ComboBox _cmbCategory = null!;
@@ -17,6 +17,7 @@ public class ProductsUserControl : UserControl
     private Button _btnAdd = null!;
     private Button _btnEdit = null!;
     private Button _btnDelete = null!;
+    private Button _btnColumns = null!;
     private Label _lblStatus = null!;
 
     private List<ProductRow> _allData = new();
@@ -25,6 +26,7 @@ public class ProductsUserControl : UserControl
     public ProductsUserControl()
     {
         BuildUi();
+        ApplyColumnVisibility();
         Load += async (_, _) => await LoadAllAsync();
     }
 
@@ -57,6 +59,9 @@ public class ProductsUserControl : UserControl
         _btnDelete = MakeButton("حذف", Color.FromArgb(200, 50, 50), 320);
         _btnDelete.Click += async (_, _) => await OnDeleteAsync();
 
+        _btnColumns = MakeButton("الأعمدة", Color.FromArgb(90, 90, 120), 425);
+        _btnColumns.Click += (_, _) => OnChooseColumns();
+
         var lblSearch = new Label { Text = "بحث:", AutoSize = true, Location = new Point(toolbar.Width - 70, 20), Anchor = AnchorStyles.Top | AnchorStyles.Right };
         _txtSearch = new TextBox { Width = 180, Location = new Point(toolbar.Width - 260, 17), Anchor = AnchorStyles.Top | AnchorStyles.Right };
         _txtSearch.TextChanged += (_, _) => ApplyFilter();
@@ -73,7 +78,7 @@ public class ProductsUserControl : UserControl
 
         toolbar.Controls.AddRange(new Control[]
         {
-            _btnRefresh, _btnAdd, _btnEdit, _btnDelete,
+            _btnRefresh, _btnAdd, _btnEdit, _btnDelete, _btnColumns,
             lblSearch, _txtSearch,
             lblCat, _cmbCategory,
             lblSup, _cmbSupplier
@@ -118,55 +123,43 @@ public class ProductsUserControl : UserControl
         _grid.RowTemplate.Height = 30;
         _grid.CellDoubleClick += async (_, _) => await OnEditAsync();
 
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Id", HeaderText = "المعرّف", Width = 70 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Code", HeaderText = "الكود", Width = 140 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "الاسم", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Category", HeaderText = "التصنيف", Width = 100 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Pattern", HeaderText = "النقشة", Width = 120 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Id", DataPropertyName = "Id", HeaderText = "المعرّف", Width = 70 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Code", DataPropertyName = "Code", HeaderText = "الكود", Width = 140 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Name", DataPropertyName = "Name", HeaderText = "الاسم", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Category", DataPropertyName = "Category", HeaderText = "التصنيف", Width = 100 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Pattern", DataPropertyName = "Pattern", HeaderText = "النقشة", Width = 120 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
-            DataPropertyName = "Ah",
-            HeaderText = "Ah",
-            Width = 60,
+            Name = "Ah", DataPropertyName = "Ah", HeaderText = "Ah", Width = 60,
             DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
         });
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
-            DataPropertyName = "L",
-            HeaderText = "L",
-            Width = 55,
+            Name = "L", DataPropertyName = "L", HeaderText = "L", Width = 55,
             DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
         });
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
-            DataPropertyName = "W",
-            HeaderText = "W",
-            Width = 55,
+            Name = "W", DataPropertyName = "W", HeaderText = "W", Width = 55,
             DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
         });
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
-            DataPropertyName = "H",
-            HeaderText = "H",
-            Width = 55,
+            Name = "H", DataPropertyName = "H", HeaderText = "H", Width = 55,
             DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
         });
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
-            DataPropertyName = "Oh",
-            HeaderText = "Oh",
-            Width = 55,
+            Name = "Oh", DataPropertyName = "Oh", HeaderText = "Oh", Width = 55,
             DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
         });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Layout", HeaderText = "Layout", Width = 70 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Layout", DataPropertyName = "Layout", HeaderText = "Layout", Width = 70 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
-            DataPropertyName = "Pallet",
-            HeaderText = "Pallet",
-            Width = 70,
+            Name = "Pallet", DataPropertyName = "Pallet", HeaderText = "Pallet", Width = 70,
             DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
         });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "SupplierName", HeaderText = "المورد", Width = 160 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "SupplierName", DataPropertyName = "SupplierName", HeaderText = "المورد", Width = 160 });
 
         // ============ شريط الحالة ============
         _lblStatus = new Label
@@ -200,6 +193,25 @@ public class ProductsUserControl : UserControl
         };
         b.FlatAppearance.BorderSize = 0;
         return b;
+    }
+
+    // ============ Column Visibility ============
+
+    /// <summary>يُطبّق تفضيلات إظهار/إخفاء الأعمدة على الجدول.</summary>
+    private void ApplyColumnVisibility()
+    {
+        var prefs = PreferencesService.Instance;
+        foreach (DataGridViewColumn col in _grid.Columns)
+        {
+            col.Visible = !prefs.IsColumnHidden(GridKey, col.Name);
+        }
+    }
+
+    private void OnChooseColumns()
+    {
+        using var dlg = new ColumnsDialog(_grid, GridKey);
+        dlg.ShowDialog(this);
+        ApplyColumnVisibility();
     }
 
     // ============ Data ============
@@ -365,7 +377,6 @@ public class ProductsUserControl : UserControl
         public int SupplierId { get; set; }
         public string? SupplierName { get; set; }
 
-        // حقول البطارية (تُخزَّن decimal في DB لكننا نعرض/نُدخل أعدادًا صحيحة)
         public decimal? Ah { get; set; }
         public decimal? L { get; set; }
         public decimal? W { get; set; }
@@ -431,6 +442,137 @@ public class ProductsUserControl : UserControl
         }
     }
 
+    // ============ Columns Dialog ============
+
+    private class ColumnsDialog : Form
+    {
+        private readonly DataGridView _grid;
+        private readonly string _gridKey;
+        private readonly List<CheckBox> _checkBoxes = new();
+
+        public ColumnsDialog(DataGridView grid, string gridKey)
+        {
+            _grid = grid;
+            _gridKey = gridKey;
+            BuildUi();
+        }
+
+        private void BuildUi()
+        {
+            Text = "إظهار / إخفاء الأعمدة";
+            StartPosition = FormStartPosition.CenterParent;
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            ClientSize = new Size(320, 460);
+            RightToLeft = RightToLeft.Yes;
+            Font = new Font("Segoe UI", 10F);
+            BackColor = Color.WhiteSmoke;
+
+            var title = new Label
+            {
+                Text = "اختر الأعمدة التي تريد عرضها:",
+                Dock = DockStyle.Top,
+                Height = 32,
+                TextAlign = ContentAlignment.MiddleRight,
+                Padding = new Padding(0, 8, 10, 0),
+                Font = new Font("Segoe UI", 10F, FontStyle.Bold)
+            };
+
+            var panel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                AutoScroll = true,
+                Padding = new Padding(15, 5, 15, 5),
+                BackColor = Color.White
+            };
+
+            var prefs = PreferencesService.Instance;
+            foreach (DataGridViewColumn col in _grid.Columns)
+            {
+                var cb = new CheckBox
+                {
+                    Text = string.IsNullOrEmpty(col.HeaderText) ? col.Name : col.HeaderText,
+                    Checked = !prefs.IsColumnHidden(_gridKey, col.Name),
+                    Tag = col.Name,
+                    Dock = DockStyle.Top,
+                    Height = 30,
+                    Padding = new Padding(0, 5, 0, 0)
+                };
+                _checkBoxes.Add(cb);
+                panel.Controls.Add(cb);
+            }
+
+            // الأزرار
+            var btnPanel = new Panel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 55,
+                BackColor = Color.WhiteSmoke
+            };
+
+            var btnSave = new Button
+            {
+                Text = "حفظ",
+                Width = 120,
+                Height = 36,
+                Location = new Point(180, 10),
+                BackColor = Color.FromArgb(46, 160, 67),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand
+            };
+            btnSave.FlatAppearance.BorderSize = 0;
+            btnSave.Click += (_, _) => SaveAndClose();
+
+            var btnShowAll = new Button
+            {
+                Text = "إظهار الكل",
+                Width = 120,
+                Height = 36,
+                Location = new Point(50, 10),
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand
+            };
+            btnShowAll.Click += (_, _) =>
+            {
+                foreach (var cb in _checkBoxes) cb.Checked = true;
+            };
+
+            var btnCancel = new Button
+            {
+                Text = "إلغاء",
+                Width = 120,
+                Height = 36,
+                Location = new Point(-80, 10), // خارج النطاق — لا نحتاجه
+                Visible = false
+            };
+
+            btnPanel.Controls.Add(btnSave);
+            btnPanel.Controls.Add(btnShowAll);
+            btnPanel.Controls.Add(btnCancel);
+
+            Controls.Add(panel);
+            Controls.Add(btnPanel);
+            Controls.Add(title);
+
+            AcceptButton = btnSave;
+        }
+
+        private void SaveAndClose()
+        {
+            var prefs = PreferencesService.Instance;
+            foreach (var cb in _checkBoxes)
+            {
+                var colName = cb.Tag as string ?? "";
+                if (string.IsNullOrEmpty(colName)) continue;
+                prefs.SetColumnVisible(_gridKey, colName, cb.Checked);
+            }
+            DialogResult = DialogResult.OK;
+            Close();
+        }
+    }
+
     // ============ Edit Dialog ============
 
     private class ProductEditDialog : Form
@@ -438,7 +580,6 @@ public class ProductsUserControl : UserControl
         private ComboBox _cmbCategory = null!;
         private ComboBox _cmbSupplier = null!;
 
-        // بطارية
         private Label _lblCode = null!;
         private TextBox _txtCode = null!;
 
@@ -459,7 +600,6 @@ public class ProductsUserControl : UserControl
         private Label _lblPallet = null!;
         private TextBox _txtPallet = null!;
 
-        // إطار
         private Label _lblName = null!;  private TextBox _txtName = null!;
         private Label _lblPattern = null!; private TextBox _txtPattern = null!;
 
@@ -490,7 +630,6 @@ public class ProductsUserControl : UserControl
             const int fieldW = 330;
             int y = 20;
 
-            // ---------- التصنيف ----------
             var lblCategory = new Label { Text = "التصنيف:", Location = new Point(labelX, y + 5), AutoSize = true };
             _cmbCategory = new ComboBox
             {
@@ -503,47 +642,38 @@ public class ProductsUserControl : UserControl
             _cmbCategory.SelectedIndexChanged += (_, _) => UpdateFieldsByCategory();
             y += 42;
 
-            // ---------- الكود ----------
             _lblCode = new Label { Text = "الكود:", Location = new Point(labelX, y + 5), AutoSize = true };
             _txtCode = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = existing?.Code ?? "" };
             y += 42;
 
-            // ---------- الاسم ----------
             _lblName = new Label { Text = "الاسم:", Location = new Point(labelX, y + 5), AutoSize = true };
             _txtName = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = existing?.Name ?? "" };
             y += 42;
 
-            // ---------- Ah ----------
             _lblAh = new Label { Text = "Ah (أمبير):", Location = new Point(labelX, y + 5), AutoSize = true };
             _txtAh = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = FormatInt(existing?.Ah) };
             y += 42;
 
-            // ---------- L ----------
             _lblL = new Label { Text = "L (الطول):", Location = new Point(labelX, y + 5), AutoSize = true };
             _txtL = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = FormatInt(existing?.L) };
             y += 42;
 
-            // ---------- W ----------
             _lblW = new Label { Text = "W (العرض):", Location = new Point(labelX, y + 5), AutoSize = true };
             _txtW = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = FormatInt(existing?.W) };
             y += 42;
 
-            // ---------- H ----------
             _lblH = new Label { Text = "H (الارتفاع):", Location = new Point(labelX, y + 5), AutoSize = true };
             _txtH = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = FormatInt(existing?.H) };
             y += 42;
 
-            // ---------- Oh ----------
             _lblOh = new Label { Text = "Oh:", Location = new Point(labelX, y + 5), AutoSize = true };
             _txtOh = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = FormatInt(existing?.Oh) };
             y += 42;
 
-            // ---------- Layout ----------
             _lblLayout = new Label { Text = "Layout (LAY NUM):", Location = new Point(labelX, y + 5), AutoSize = true };
             _txtLayout = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = existing?.Layout?.ToString() ?? "" };
             y += 42;
 
-            // ---------- الصورة ----------
             _lblPicture = new Label { Text = "صورة الرسمة:", Location = new Point(labelX, y + 5), AutoSize = true };
             _btnPickImage = new Button
             {
@@ -581,17 +711,14 @@ public class ProductsUserControl : UserControl
             };
             y += 108;
 
-            // ---------- Pallet ----------
             _lblPallet = new Label { Text = "Pallet:", Location = new Point(labelX, y + 5), AutoSize = true };
             _txtPallet = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = existing?.Pallet?.ToString() ?? "" };
             y += 42;
 
-            // ---------- النقشة ----------
             _lblPattern = new Label { Text = "النقشة:", Location = new Point(labelX, y + 5), AutoSize = true };
             _txtPattern = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = existing?.Pattern ?? "" };
             y += 42;
 
-            // ---------- المورد ----------
             var lblSupplier = new Label { Text = "المورد:", Location = new Point(labelX, y + 5), AutoSize = true };
             _cmbSupplier = new ComboBox
             {
@@ -609,7 +736,6 @@ public class ProductsUserControl : UserControl
             }
             y += 42;
 
-            // ---------- الحالة ----------
             _lblStatus = new Label
             {
                 Location = new Point(30, y + 5),
@@ -619,7 +745,6 @@ public class ProductsUserControl : UserControl
                 TextAlign = ContentAlignment.MiddleRight
             };
 
-            // ---------- الأزرار ----------
             var btnSave = new Button
             {
                 Text = "حفظ",
@@ -648,31 +773,22 @@ public class ProductsUserControl : UserControl
             AcceptButton = btnSave;
             CancelButton = btnCancel;
 
-            // ---------- الإضافة إلى Controls ----------
             Controls.Add(lblCategory); Controls.Add(_cmbCategory);
-
             Controls.Add(_lblCode); Controls.Add(_txtCode);
             Controls.Add(_lblName); Controls.Add(_txtName);
-
             Controls.Add(_lblAh); Controls.Add(_txtAh);
             Controls.Add(_lblL); Controls.Add(_txtL);
             Controls.Add(_lblW); Controls.Add(_txtW);
             Controls.Add(_lblH); Controls.Add(_txtH);
             Controls.Add(_lblOh); Controls.Add(_txtOh);
-
             Controls.Add(_lblLayout); Controls.Add(_txtLayout);
-
             Controls.Add(_lblPicture);
             Controls.Add(_btnPickImage);
             Controls.Add(_btnClearImage);
             Controls.Add(_picLayout);
-
             Controls.Add(_lblPallet); Controls.Add(_txtPallet);
-
             Controls.Add(_lblPattern); Controls.Add(_txtPattern);
-
             Controls.Add(lblSupplier); Controls.Add(_cmbSupplier);
-
             Controls.Add(_lblStatus);
             Controls.Add(btnSave);
             Controls.Add(btnCancel);
@@ -710,8 +826,6 @@ public class ProductsUserControl : UserControl
             _lblPattern.Visible = !isBattery; _txtPattern.Visible = !isBattery;
         }
 
-        // ============ Image ============
-
         private void PickImage()
         {
             using var ofd = new OpenFileDialog
@@ -739,8 +853,6 @@ public class ProductsUserControl : UserControl
             _picLayout.Image?.Dispose();
             _picLayout.Image = null;
         }
-
-        // ============ Save ============
 
         private void OnSave(ProductRow? existing)
         {
@@ -818,7 +930,6 @@ public class ProductsUserControl : UserControl
             return false;
         }
 
-        /// <summary>يستقبل إدخال عدد صحيح ويُعيده كـ decimal? (للتوافق مع DB).</summary>
         private static bool TryParseNullableDecimalFromInt(string text, out decimal? value)
         {
             value = null;

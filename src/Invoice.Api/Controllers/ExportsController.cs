@@ -32,10 +32,15 @@ public class ExportsController : ControllerBase
     // تصدير الفواتير
     // ============================================================
 
-    /// <summary>تنزيل فاتورة كملف PDF.</summary>
+    /// <summary>
+    /// تنزيل فاتورة كملف PDF.
+    /// hidden: مفاتيح الأجزاء المخفية (مفصولة بفواصل). انظر InvoicePdfExporter.Keys.
+    /// </summary>
     [HttpGet("invoice/{id:long}/pdf")]
     [Authorize(Policy = Permissions.ExportsRead)]
-    public async Task<IActionResult> ExportInvoicePdf(long id)
+    public async Task<IActionResult> ExportInvoicePdf(
+        long id,
+        [FromQuery] string? hidden = null)
     {
         var invoice = await LoadInvoiceAsync(id);
         if (invoice == null)
@@ -46,7 +51,7 @@ public class ExportsController : ControllerBase
 
         try
         {
-            InvoicePdfExporter.Export(invoice, company, filePath);
+            InvoicePdfExporter.Export(invoice, company, filePath, ParseHidden(hidden));
             var bytes = await System.IO.File.ReadAllBytesAsync(filePath);
             System.IO.File.Delete(filePath);
             return File(bytes, "application/pdf", fileName);
@@ -57,10 +62,15 @@ public class ExportsController : ControllerBase
         }
     }
 
-    /// <summary>تنزيل فاتورة كملف Excel.</summary>
+    /// <summary>
+    /// تنزيل فاتورة كملف Excel.
+    /// hidden: مفاتيح الأجزاء المخفية (مفصولة بفواصل). انظر InvoicePdfExporter.Keys.
+    /// </summary>
     [HttpGet("invoice/{id:long}/excel")]
     [Authorize(Policy = Permissions.ExportsRead)]
-    public async Task<IActionResult> ExportInvoiceExcel(long id)
+    public async Task<IActionResult> ExportInvoiceExcel(
+        long id,
+        [FromQuery] string? hidden = null)
     {
         var invoice = await LoadInvoiceAsync(id);
         if (invoice == null)
@@ -71,7 +81,7 @@ public class ExportsController : ControllerBase
 
         try
         {
-            InvoiceExcelExporter.Export(invoice, company, filePath);
+            InvoiceExcelExporter.Export(invoice, company, filePath, ParseHidden(hidden));
             var bytes = await System.IO.File.ReadAllBytesAsync(filePath);
             System.IO.File.Delete(filePath);
             return File(bytes,
@@ -181,6 +191,17 @@ public class ExportsController : ControllerBase
     }
 
     // ========= دوال مساعدة =========
+
+    /// <summary>يُحوّل نص "a,b,c" إلى HashSet.</summary>
+    private static HashSet<string>? ParseHidden(string? hidden)
+    {
+        if (string.IsNullOrWhiteSpace(hidden)) return null;
+        var set = hidden
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(s => !string.IsNullOrEmpty(s))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return set.Count > 0 ? set : null;
+    }
 
     private async Task<Domain.Entities.Invoice?> LoadInvoiceAsync(long id)
     {

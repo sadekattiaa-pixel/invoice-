@@ -5,98 +5,113 @@ using InvoiceEntity = Invoice.Domain.Entities.Invoice;
 namespace Invoice.Infrastructure.Exporters;
 
 /// <summary>
-/// يُولّد ملف Excel للفاتورة — بنفس ترتيب PDF، بورقتين:
-/// ورقة "الفاتورة": الشعار + بيانات الشركة + المورد + الأصناف + ملاحظات
+/// يُولّد ملف Excel للفاتورة — بورقتين:
+/// ورقة "الفاتورة": الشعار + الشركة + المورد + الأصناف + الملاحظات
 /// ورقة "الملخص": المدفوعات + الخصومات + المصاريف + الملخص
+///
+/// يدعم إخفاء أجزاء كاملة عبر المعامل hidden (مفاتيح InvoicePdfExporter.Keys).
 /// </summary>
 public static class InvoiceExcelExporter
 {
-    public static void Export(InvoiceEntity invoice, CompanyInfoDto company, string filePath)
+    public static void Export(
+        InvoiceEntity invoice,
+        CompanyInfoDto company,
+        string filePath,
+        HashSet<string>? hidden = null)
     {
+        var hiddenKeys = hidden != null
+            ? new HashSet<string>(hidden, StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        bool IsHidden(string key) => hiddenKeys.Contains(key);
+
         using var workbook = new XLWorkbook();
 
         // ================= الورقة 1: الفاتورة =================
         var ws1 = workbook.Worksheets.Add("الفاتورة");
         ws1.RightToLeft = true;
-        BuildInvoiceSheet(ws1, invoice, company);
+        BuildInvoiceSheet(ws1, invoice, company, IsHidden);
 
         // ================= الورقة 2: الملخص =================
         var ws2 = workbook.Worksheets.Add("الملخص");
         ws2.RightToLeft = true;
-        BuildSummarySheet(ws2, invoice);
+        BuildSummarySheet(ws2, invoice, IsHidden);
 
         workbook.SaveAs(filePath);
     }
 
     // ============================================================
-    // الورقة 1: الترويسة + المورد + الأصناف + الملاحظات
+    // الورقة 1
     // ============================================================
-    private static void BuildInvoiceSheet(IXLWorksheet ws, InvoiceEntity invoice, CompanyInfoDto company)
+    private static void BuildInvoiceSheet(
+        IXLWorksheet ws,
+        InvoiceEntity invoice,
+        CompanyInfoDto company,
+        Func<string, bool> IsHidden)
     {
         const int LastCol = 7;
         int row = 1;
         var supplier = invoice.Supplier;
 
-        // عرض ثابت للأعمدة
         for (int c = 1; c <= LastCol; c++)
             ws.Column(c).Width = 14;
 
         // ====================================================
-        // ========== 1) بيانات الشركة (يمين) + الشعار (يسار) ==========
+        // ========== 1) الشركة (يمين) + الشعار (يسار) ==========
         // ====================================================
-        // في ورقة RTL: العمود A على اليمين، العمود G على اليسار.
-        // بيانات الشركة في A:C (يمين)، الشعار في E:G (يسار).
-
-        void CompanyLine(string? value, bool bold = false, int fontSize = 11)
+        if (!IsHidden(InvoicePdfExporter.Keys.CompanyInfo))
         {
-            var r = ws.Range(row, 1, row, 3);
-            r.Merge();
-            var cell = ws.Cell(row, 1);
-            cell.Value = value ?? "";
-            cell.Style.Font.Bold = bold;
-            cell.Style.Font.FontSize = fontSize;
-            cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
-            cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Top;
-            if (ws.Row(row).Height < 20) ws.Row(row).Height = 20;
-            row++;
+            void CompanyLine(string? value, bool bold = false, int fontSize = 11)
+            {
+                var r = ws.Range(row, 1, row, 3);
+                r.Merge();
+                var cell = ws.Cell(row, 1);
+                cell.Value = value ?? "";
+                cell.Style.Font.Bold = bold;
+                cell.Style.Font.FontSize = fontSize;
+                cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+                cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Top;
+                if (ws.Row(row).Height < 20) ws.Row(row).Height = 20;
+                row++;
+            }
+
+            CompanyLine(company.Name, bold: true, fontSize: 16);
+            CompanyLine(company.Address);
+            CompanyLine(company.Phone);
+            CompanyLine(company.Email);
+            CompanyLine(company.Website);
         }
 
-        int logoStartRow = row;
-        CompanyLine(company.Name, bold: true, fontSize: 16);
-        CompanyLine(company.Address);
-        CompanyLine(company.Phone);
-        CompanyLine(company.Email);
-        CompanyLine(company.Website);
-        int companyDataEndRow = row - 1;
-
-        // الشعار — على اليسار (العمود E, أي رقم 5)
-        if (company.LogoBytes != null && company.LogoBytes.Length > 0)
+        // الشعار (إن لم يُخفَ)
+        if (!IsHidden(InvoicePdfExporter.Keys.Logo)
+            && company.LogoBytes != null && company.LogoBytes.Length > 0)
         {
             using var ms = new MemoryStream(company.LogoBytes);
             var picture = ws.AddPicture(ms);
             picture.Name = "CompanyLogo";
-            picture.MoveTo(ws.Cell(logoStartRow, 5));
+            picture.MoveTo(ws.Cell(1, 5));
             picture.WithSize(160, 100);
         }
 
-        row++; // فراغ
+        // مساحة بعد الشعار
+        int logoRows = 6;
+        while (row < logoRows) row++;
+        row++;
 
         // ====================================================
-        // ========== 2) بيانات الفاتورة (يمين) + المورد (يسار) ==========
+        // ========== 2) الفاتورة (يمين) + المورد (يسار) ==========
         // ====================================================
-
-        // قائمة سطور الفاتورة (يمين)
-        var invoiceLines = new List<string?>
+        var invoiceLines = new List<string?>();
+        if (!IsHidden(InvoicePdfExporter.Keys.InvoiceInfo))
         {
-            invoice.InvoiceDate.ToString("yyyy-MM-dd"),
-            invoice.InvoiceNo
-        };
-        if (!string.IsNullOrWhiteSpace(invoice.SupplierInvoiceNo))
-            invoiceLines.Add(invoice.SupplierInvoiceNo);
+            invoiceLines.Add(invoice.InvoiceDate.ToString("yyyy-MM-dd"));
+            invoiceLines.Add(invoice.InvoiceNo);
+            if (!string.IsNullOrWhiteSpace(invoice.SupplierInvoiceNo))
+                invoiceLines.Add(invoice.SupplierInvoiceNo);
+        }
 
-        // قائمة سطور المورد (يسار)
         var supplierLines = new List<string?>();
-        if (supplier != null)
+        if (!IsHidden(InvoicePdfExporter.Keys.SupplierInfo) && supplier != null)
         {
             if (!string.IsNullOrWhiteSpace(supplier.Name)) supplierLines.Add(supplier.Name);
             if (!string.IsNullOrWhiteSpace(supplier.Address)) supplierLines.Add(supplier.Address);
@@ -107,7 +122,6 @@ public static class InvoiceExcelExporter
         int maxLines = Math.Max(invoiceLines.Count, supplierLines.Count);
         for (int i = 0; i < maxLines; i++)
         {
-            // الفاتورة على اليمين — A:C
             var invVal = i < invoiceLines.Count ? invoiceLines[i] : "";
             var rRight = ws.Range(row, 1, row, 3);
             rRight.Merge();
@@ -115,7 +129,6 @@ public static class InvoiceExcelExporter
             rRight.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
             rRight.Style.Alignment.Vertical = XLAlignmentVerticalValues.Top;
 
-            // المورد على اليسار — E:G
             var supVal = i < supplierLines.Count ? supplierLines[i] : "";
             var rLeft = ws.Range(row, 5, row, LastCol);
             rLeft.Merge();
@@ -126,74 +139,84 @@ public static class InvoiceExcelExporter
             row++;
         }
 
-        row++; // فراغ
+        row++;
 
         // ====================================================
         // ========== 3) جدول الأصناف ==========
         // ====================================================
-        var titleR = ws.Range(row, 1, row, LastCol);
-        titleR.Merge();
-        titleR.Value = "جدول الأصناف";
-        titleR.Style.Font.Bold = true;
-        titleR.Style.Font.FontSize = 13;
-        titleR.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
-        row++;
-
-        int tableStartRow = row;
-        string[] headers = { "#", "الصنف", "الكمية", "الشراء $", "البيع د.ل", "إجمالي البيع", "الربح" };
-        for (int i = 0; i < headers.Length; i++)
+        // أعمدة متاحة — (key, header, value func, format, width)
+        var allCols = new List<(string Key, string Header, Func<Domain.Entities.InvoiceItem, object?> Get, string? Format)>
         {
-            var cell = ws.Cell(row, i + 1);
-            cell.Value = headers[i];
-            cell.Style.Font.Bold = true;
-            cell.Style.Fill.BackgroundColor = XLColor.LightGray;
-            cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
-            cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-            cell.Style.Border.OutsideBorderColor = XLColor.Black;
-        }
-        row++;
+            (InvoicePdfExporter.Keys.ItemsLineNo,      "#",            item => item.LineNo,           null),
+            (InvoicePdfExporter.Keys.ItemsProduct,     "الصنف",        item => item.Product?.Name ?? "—", null),
+            (InvoicePdfExporter.Keys.ItemsQuantity,    "الكمية",       item => item.Quantity,         "#,##0.##"),
+            (InvoicePdfExporter.Keys.ItemsPurchaseUsd, "الشراء $",     item => item.PurchaseUsd,      "#,##0.00"),
+            (InvoicePdfExporter.Keys.ItemsSaleDzd,     "البيع د.ل",    item => item.SaleDzd,          "#,##0.00"),
+            (InvoicePdfExporter.Keys.ItemsTotalSale,   "إجمالي البيع", item => item.TotalSale,        "#,##0.00"),
+            (InvoicePdfExporter.Keys.ItemsTotalProfit, "الربح",        item => item.TotalProfit,      "#,##0.00"),
+        };
+        var visibleCols = allCols.Where(c => !IsHidden(c.Key)).ToList();
 
-        foreach (var item in invoice.Items.OrderBy(i => i.LineNo))
+        if (visibleCols.Count > 0 && invoice.Items.Any())
         {
-            ws.Cell(row, 1).Value = item.LineNo;
-            ws.Cell(row, 2).Value = item.Product?.Name ?? "—";
-            ws.Cell(row, 3).Value = item.Quantity;
-            ws.Cell(row, 4).Value = item.PurchaseUsd;
-            ws.Cell(row, 5).Value = item.SaleDzd;
-            ws.Cell(row, 6).Value = item.TotalSale;
-            ws.Cell(row, 7).Value = item.TotalProfit;
+            var titleR = ws.Range(row, 1, row, LastCol);
+            titleR.Merge();
+            titleR.Value = "جدول الأصناف";
+            titleR.Style.Font.Bold = true;
+            titleR.Style.Font.FontSize = 13;
+            titleR.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
+            row++;
 
-            ws.Cell(row, 3).Style.NumberFormat.Format = "#,##0.##";
-            ws.Cell(row, 4).Style.NumberFormat.Format = "#,##0.00";
-            ws.Cell(row, 5).Style.NumberFormat.Format = "#,##0.00";
-            ws.Cell(row, 6).Style.NumberFormat.Format = "#,##0.00";
-            ws.Cell(row, 7).Style.NumberFormat.Format = "#,##0.00";
-
-            for (int c = 1; c <= LastCol; c++)
+            int tableStartRow = row;
+            for (int i = 0; i < visibleCols.Count; i++)
             {
-                var cell = ws.Cell(row, c);
+                var cell = ws.Cell(row, i + 1);
+                cell.Value = visibleCols[i].Header;
+                cell.Style.Font.Bold = true;
+                cell.Style.Fill.BackgroundColor = XLColor.LightGray;
                 cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
                 cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
                 cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
                 cell.Style.Border.OutsideBorderColor = XLColor.Black;
             }
             row++;
+
+            foreach (var item in invoice.Items.OrderBy(i => i.LineNo))
+            {
+                for (int i = 0; i < visibleCols.Count; i++)
+                {
+                    var col = visibleCols[i];
+                    var cell = ws.Cell(row, i + 1);
+                    var val = col.Get(item);
+                    if (val is decimal d) cell.Value = d;
+                    else if (val is int intVal) cell.Value = intVal;
+                    else cell.Value = val?.ToString() ?? "";
+
+                    if (!string.IsNullOrEmpty(col.Format))
+                        cell.Style.NumberFormat.Format = col.Format;
+
+                    cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                    cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                    cell.Style.Border.OutsideBorderColor = XLColor.Black;
+                }
+                row++;
+            }
+
+            int tableEndRow = row - 1;
+            var tableRange = ws.Range(tableStartRow, 1, tableEndRow, visibleCols.Count);
+            tableRange.Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
+            tableRange.Style.Border.OutsideBorderColor = XLColor.Black;
+            tableRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+            tableRange.Style.Border.InsideBorderColor = XLColor.Gray;
+
+            row++;
         }
-
-        int tableEndRow = row - 1;
-        var tableRange = ws.Range(tableStartRow, 1, tableEndRow, LastCol);
-        tableRange.Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
-        tableRange.Style.Border.OutsideBorderColor = XLColor.Black;
-        tableRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
-        tableRange.Style.Border.InsideBorderColor = XLColor.Gray;
-
-        row++; // فراغ
 
         // ====================================================
         // ========== 4) ملاحظات ==========
         // ====================================================
-        if (!string.IsNullOrWhiteSpace(invoice.Notes))
+        if (!IsHidden(InvoicePdfExporter.Keys.Notes) && !string.IsNullOrWhiteSpace(invoice.Notes))
         {
             var t = ws.Range(row, 1, row, LastCol);
             t.Merge();
@@ -212,9 +235,12 @@ public static class InvoiceExcelExporter
     }
 
     // ============================================================
-    // الورقة 2: المدفوعات + الخصومات + المصاريف + الملخص
+    // الورقة 2
     // ============================================================
-    private static void BuildSummarySheet(IXLWorksheet ws, InvoiceEntity invoice)
+    private static void BuildSummarySheet(
+        IXLWorksheet ws,
+        InvoiceEntity invoice,
+        Func<string, bool> IsHidden)
     {
         const int LastCol = 7;
         int row = 1;
@@ -283,49 +309,61 @@ public static class InvoiceExcelExporter
         }
 
         // ========== 1) المدفوعات ==========
-        var payments = invoice.Payments.OrderBy(p => p.LineNo).ToList();
-        if (payments.Count > 0)
+        if (!IsHidden(InvoicePdfExporter.Keys.Payments))
         {
-            SectionTitle("المدفوعات");
-            foreach (var p in payments)
-                SectionItem(p.Label ?? "—", p.Amount);
-            SectionTotal("الإجمالي", invoice.TotalPayments);
-            row++;
+            var payments = invoice.Payments.OrderBy(p => p.LineNo).ToList();
+            if (payments.Count > 0)
+            {
+                SectionTitle("المدفوعات");
+                foreach (var p in payments)
+                    SectionItem(p.Label ?? "—", p.Amount);
+                SectionTotal("الإجمالي", invoice.TotalPayments);
+                row++;
+            }
         }
 
         // ========== 2) الخصومات ==========
-        var discounts = invoice.Discounts.OrderBy(d => d.LineNo).ToList();
-        if (discounts.Count > 0)
+        if (!IsHidden(InvoicePdfExporter.Keys.Discounts))
         {
-            SectionTitle("الخصومات");
-            foreach (var d in discounts)
-                SectionItem(d.Label ?? "—", d.Amount);
-            SectionTotal("الإجمالي", invoice.TotalDiscounts);
-            row++;
+            var discounts = invoice.Discounts.OrderBy(d => d.LineNo).ToList();
+            if (discounts.Count > 0)
+            {
+                SectionTitle("الخصومات");
+                foreach (var d in discounts)
+                    SectionItem(d.Label ?? "—", d.Amount);
+                SectionTotal("الإجمالي", invoice.TotalDiscounts);
+                row++;
+            }
         }
 
         // ========== 3) المصاريف ==========
-        var expenses = invoice.Expenses.OrderBy(e => e.LineNo).ToList();
-        if (expenses.Count > 0)
+        if (!IsHidden(InvoicePdfExporter.Keys.Expenses))
         {
-            SectionTitle("المصاريف");
-            foreach (var e in expenses)
-                SectionItem(e.Label, e.Amount);
-            SectionTotal("الإجمالي", invoice.TotalExpenses);
-            row++;
+            var expenses = invoice.Expenses.OrderBy(e => e.LineNo).ToList();
+            if (expenses.Count > 0)
+            {
+                SectionTitle("المصاريف");
+                foreach (var e in expenses)
+                    SectionItem(e.Label, e.Amount);
+                SectionTotal("الإجمالي", invoice.TotalExpenses);
+                row++;
+            }
         }
 
         // ========== 4) الملخص ==========
-        SectionTitle("الملخص");
-        SummaryRow("إجمالي المدفوعات", $"{invoice.TotalPayments:N2} د.ل");
-        SummaryRow("إجمالي الخصومات", $"{invoice.TotalDiscounts:N2} د.ل");
-        SummaryRow("صافي المدفوعات", $"{invoice.NetPayments:N2} د.ل");
-        SummaryRow("إجمالي المصاريف", $"{invoice.TotalExpenses:N2} د.ل");
-        SummaryRow("صافي التكلفة", $"{invoice.NetCost:N2} د.ل", bold: true);
-        SummaryRow("القيمة بالدولار", $"$ {invoice.TotalUsd:N2}");
-        SummaryRow("سعر الصرف", invoice.ExchangeRate.ToString("N6"));
-        SummaryRow("إجمالي البيع", $"{invoice.TotalSales:N2} د.ل", bold: true);
-        SummaryRow("إجمالي الربح", $"{invoice.TotalProfit:N2} د.ل", bold: true);
-        SummaryRow("هامش الربح %", $"{invoice.ProfitMargin:N4} %");
+        if (!IsHidden(InvoicePdfExporter.Keys.Summary))
+        {
+            SectionTitle("الملخص");
+            SummaryRow("إجمالي المدفوعات", $"{invoice.TotalPayments:N2} د.ل");
+            SummaryRow("إجمالي الخصومات", $"{invoice.TotalDiscounts:N2} د.ل");
+            SummaryRow("صافي المدفوعات", $"{invoice.NetPayments:N2} د.ل");
+            SummaryRow("إجمالي المصاريف", $"{invoice.TotalExpenses:N2} د.ل");
+            SummaryRow("صافي التكلفة", $"{invoice.NetCost:N2} د.ل", bold: true);
+            SummaryRow("القيمة بالدولار", $"$ {invoice.TotalUsd:N2}");
+            SummaryRow("سعر الصرف", invoice.ExchangeRate.ToString("N6"));
+            SummaryRow("إجمالي البيع", $"{invoice.TotalSales:N2} د.ل", bold: true);
+            SummaryRow("إجمالي الربح", $"{invoice.TotalProfit:N2} د.ل", bold: true);
+            SummaryRow("هامش الربح %", $"{invoice.ProfitMargin:N4} %");
+        }
     }
 }

@@ -46,7 +46,6 @@ public sealed class ApiClient
     // Authentication
     // ============================================================
 
-    /// <summary>تسجيل دخول. يرمي ApiException عند الفشل.</summary>
     public async Task LoginAsync(string username, string password)
     {
         var body = new { username, password };
@@ -65,7 +64,6 @@ public sealed class ApiClient
         SetSession(login);
     }
 
-    /// <summary>مسح الجلسة الحالية (تسجيل خروج).</summary>
     public void Logout()
     {
         lock (_lock)
@@ -77,7 +75,6 @@ public sealed class ApiClient
         }
     }
 
-    /// <summary>هل المستخدم يملك الصلاحية المطلوبة؟</summary>
     public bool HasPermission(string permission)
         => CurrentUser?.Permissions.Contains(permission, StringComparer.OrdinalIgnoreCase) == true;
 
@@ -160,10 +157,14 @@ public sealed class ApiClient
         await EnsureSuccessAsync(resp);
     }
 
-    /// <summary>تنزيل ملف (PDF/Excel) كبايتات.</summary>
-    public async Task<byte[]> DownloadAsync(string endpoint)
+    /// <summary>
+    /// تنزيل ملف (PDF/Excel) كبايتات.
+    /// hiddenKeys: قائمة مفاتيح الأعمدة/الأقسام المخفية — تُرسل كـ ?hidden=a,b,c (اختياري).
+    /// </summary>
+    public async Task<byte[]> DownloadAsync(string endpoint, IEnumerable<string>? hiddenKeys = null)
     {
-        using var resp = await SendWithRefreshAsync(() => BuildRequest(HttpMethod.Get, endpoint));
+        var url = AppendHiddenQuery(endpoint, hiddenKeys);
+        using var resp = await SendWithRefreshAsync(() => BuildRequest(HttpMethod.Get, url));
         await EnsureSuccessAsync(resp);
         return await resp.Content.ReadAsByteArrayAsync();
     }
@@ -193,6 +194,21 @@ public sealed class ApiClient
     // ============================================================
     // Internals
     // ============================================================
+
+    /// <summary>يُضيف ?hidden=a,b,c إلى endpoint إن كانت هناك قائمة.</summary>
+    private static string AppendHiddenQuery(string endpoint, IEnumerable<string>? hiddenKeys)
+    {
+        if (hiddenKeys == null) return endpoint;
+        var list = hiddenKeys
+            .Where(k => !string.IsNullOrWhiteSpace(k))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (list.Count == 0) return endpoint;
+
+        var joined = Uri.EscapeDataString(string.Join(",", list));
+        var sep = endpoint.Contains('?') ? "&" : "?";
+        return $"{endpoint}{sep}hidden={joined}";
+    }
 
     private HttpRequestMessage BuildRequest(HttpMethod method, string endpoint)
     {
@@ -268,7 +284,6 @@ public sealed class ApiClient
 // Supporting types
 // ============================================================
 
-/// <summary>استثناء يحمل رسالة خطأ + كود HTTP من الـ API.</summary>
 public sealed class ApiException : Exception
 {
     public HttpStatusCode StatusCode { get; }
@@ -279,7 +294,6 @@ public sealed class ApiException : Exception
     }
 }
 
-/// <summary>استجابة /api/auth/login و /api/auth/refresh.</summary>
 public class LoginResponse
 {
     public string AccessToken { get; set; } = "";
@@ -288,7 +302,6 @@ public class LoginResponse
     public UserInfoDto User { get; set; } = new();
 }
 
-/// <summary>بيانات المستخدم الحالي (من /api/auth/login و /me).</summary>
 public class UserInfoDto
 {
     public int Id { get; set; }
