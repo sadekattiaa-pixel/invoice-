@@ -1,11 +1,11 @@
-using System.Text.Json;
 using Invoice.Desktop.Services;
 
 namespace Invoice.Desktop.UserControls;
 
 /// <summary>
 /// صفحة الأصناف — قائمة + بحث + فلترة + إضافة + تعديل + حذف.
-/// تراعي قواعد العمل: بطارية (كود فقط) / إطار (اسم + نقشة + مورد).
+/// - بطارية: كود + Ah + L + W + H + Oh + Layout + صورة + Pallet.
+/// - إطار: اسم + نقشة.
 /// </summary>
 public class ProductsUserControl : UserControl
 {
@@ -119,11 +119,54 @@ public class ProductsUserControl : UserControl
         _grid.CellDoubleClick += async (_, _) => await OnEditAsync();
 
         _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Id", HeaderText = "المعرّف", Width = 70 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Code", HeaderText = "الكود", Width = 180 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Code", HeaderText = "الكود", Width = 140 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "الاسم", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Category", HeaderText = "التصنيف", Width = 120 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Pattern", HeaderText = "النقشة", Width = 150 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "SupplierName", HeaderText = "المورد", Width = 180 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Category", HeaderText = "التصنيف", Width = 100 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Pattern", HeaderText = "النقشة", Width = 120 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            DataPropertyName = "Ah",
+            HeaderText = "Ah",
+            Width = 60,
+            DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
+        });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            DataPropertyName = "L",
+            HeaderText = "L",
+            Width = 55,
+            DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
+        });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            DataPropertyName = "W",
+            HeaderText = "W",
+            Width = 55,
+            DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
+        });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            DataPropertyName = "H",
+            HeaderText = "H",
+            Width = 55,
+            DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
+        });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            DataPropertyName = "Oh",
+            HeaderText = "Oh",
+            Width = 55,
+            DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
+        });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Layout", HeaderText = "Layout", Width = 70 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            DataPropertyName = "Pallet",
+            HeaderText = "Pallet",
+            Width = 70,
+            DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
+        });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "SupplierName", HeaderText = "المورد", Width = 160 });
 
         // ============ شريط الحالة ============
         _lblStatus = new Label
@@ -321,6 +364,16 @@ public class ProductsUserControl : UserControl
         public string? Pattern { get; set; }
         public int SupplierId { get; set; }
         public string? SupplierName { get; set; }
+
+        // حقول البطارية (تُخزَّن decimal في DB لكننا نعرض/نُدخل أعدادًا صحيحة)
+        public decimal? Ah { get; set; }
+        public decimal? L { get; set; }
+        public decimal? W { get; set; }
+        public decimal? H { get; set; }
+        public decimal? Oh { get; set; }
+        public int? Layout { get; set; }
+        public string? LayoutImageFilename { get; set; }
+        public int? Pallet { get; set; }
     }
 
     public class SupplierItem
@@ -329,20 +382,89 @@ public class ProductsUserControl : UserControl
         public string Name { get; set; } = "";
     }
 
+    // ============ Layout Image Storage (local) ============
+
+    internal static class LayoutStorage
+    {
+        public static string Folder
+        {
+            get
+            {
+                var folder = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "CostProfitApp", "Desktop", "Layouts");
+                Directory.CreateDirectory(folder);
+                return folder;
+            }
+        }
+
+        public static string CopyToStorage(string sourcePath)
+        {
+            var ext = Path.GetExtension(sourcePath).ToLowerInvariant();
+            if (string.IsNullOrEmpty(ext)) ext = ".png";
+            var filename = $"layout_{Guid.NewGuid():N}{ext}";
+            File.Copy(sourcePath, Path.Combine(Folder, filename), overwrite: true);
+            return filename;
+        }
+
+        public static string? GetFullPath(string? filename)
+        {
+            if (string.IsNullOrWhiteSpace(filename)) return null;
+            var path = Path.Combine(Folder, filename);
+            return File.Exists(path) ? path : null;
+        }
+
+        public static Image? TryLoadImage(string? filename)
+        {
+            var path = GetFullPath(filename);
+            if (path == null) return null;
+            try
+            {
+                var bytes = File.ReadAllBytes(path);
+                var ms = new MemoryStream(bytes);
+                return Image.FromStream(ms);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+    }
+
     // ============ Edit Dialog ============
 
     private class ProductEditDialog : Form
     {
         private ComboBox _cmbCategory = null!;
-        private TextBox _txtCode = null!;
-        private TextBox _txtName = null!;
-        private TextBox _txtPattern = null!;
         private ComboBox _cmbSupplier = null!;
-        private Label _lblStatus = null!;
 
+        // بطارية
         private Label _lblCode = null!;
-        private Label _lblName = null!;
-        private Label _lblPattern = null!;
+        private TextBox _txtCode = null!;
+
+        private Label _lblAh = null!; private TextBox _txtAh = null!;
+        private Label _lblL = null!;  private TextBox _txtL = null!;
+        private Label _lblW = null!;  private TextBox _txtW = null!;
+        private Label _lblH = null!;  private TextBox _txtH = null!;
+        private Label _lblOh = null!; private TextBox _txtOh = null!;
+
+        private Label _lblLayout = null!;
+        private TextBox _txtLayout = null!;
+
+        private Label _lblPicture = null!;
+        private Button _btnPickImage = null!;
+        private Button _btnClearImage = null!;
+        private PictureBox _picLayout = null!;
+
+        private Label _lblPallet = null!;
+        private TextBox _txtPallet = null!;
+
+        // إطار
+        private Label _lblName = null!;  private TextBox _txtName = null!;
+        private Label _lblPattern = null!; private TextBox _txtPattern = null!;
+
+        private Label _lblStatus = null!;
+        private string? _layoutImageFilename;
 
         public object Result { get; private set; } = new { };
 
@@ -358,16 +480,15 @@ public class ProductsUserControl : UserControl
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
-            ClientSize = new Size(520, 380);
+            ClientSize = new Size(520, 700);
             RightToLeft = RightToLeft.Yes;
-            // NOTE: RightToLeftLayout = true يسبب مشاكل مع ComboBox — لا نستخدمه هنا.
             Font = new Font("Segoe UI", 10F);
             BackColor = Color.WhiteSmoke;
 
-            int y = 20;
             const int labelX = 30;
             const int fieldX = 160;
             const int fieldW = 330;
+            int y = 20;
 
             // ---------- التصنيف ----------
             var lblCategory = new Label { Text = "التصنيف:", Location = new Point(labelX, y + 5), AutoSize = true };
@@ -390,6 +511,79 @@ public class ProductsUserControl : UserControl
             // ---------- الاسم ----------
             _lblName = new Label { Text = "الاسم:", Location = new Point(labelX, y + 5), AutoSize = true };
             _txtName = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = existing?.Name ?? "" };
+            y += 42;
+
+            // ---------- Ah ----------
+            _lblAh = new Label { Text = "Ah (أمبير):", Location = new Point(labelX, y + 5), AutoSize = true };
+            _txtAh = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = FormatInt(existing?.Ah) };
+            y += 42;
+
+            // ---------- L ----------
+            _lblL = new Label { Text = "L (الطول):", Location = new Point(labelX, y + 5), AutoSize = true };
+            _txtL = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = FormatInt(existing?.L) };
+            y += 42;
+
+            // ---------- W ----------
+            _lblW = new Label { Text = "W (العرض):", Location = new Point(labelX, y + 5), AutoSize = true };
+            _txtW = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = FormatInt(existing?.W) };
+            y += 42;
+
+            // ---------- H ----------
+            _lblH = new Label { Text = "H (الارتفاع):", Location = new Point(labelX, y + 5), AutoSize = true };
+            _txtH = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = FormatInt(existing?.H) };
+            y += 42;
+
+            // ---------- Oh ----------
+            _lblOh = new Label { Text = "Oh:", Location = new Point(labelX, y + 5), AutoSize = true };
+            _txtOh = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = FormatInt(existing?.Oh) };
+            y += 42;
+
+            // ---------- Layout ----------
+            _lblLayout = new Label { Text = "Layout (LAY NUM):", Location = new Point(labelX, y + 5), AutoSize = true };
+            _txtLayout = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = existing?.Layout?.ToString() ?? "" };
+            y += 42;
+
+            // ---------- الصورة ----------
+            _lblPicture = new Label { Text = "صورة الرسمة:", Location = new Point(labelX, y + 5), AutoSize = true };
+            _btnPickImage = new Button
+            {
+                Text = "اختيار صورة...",
+                Location = new Point(fieldX, y),
+                Width = 150,
+                Height = 30,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                BackColor = Color.FromArgb(230, 230, 240)
+            };
+            _btnPickImage.Click += (_, _) => PickImage();
+
+            _btnClearImage = new Button
+            {
+                Text = "إزالة",
+                Location = new Point(fieldX + 160, y),
+                Width = 80,
+                Height = 30,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                BackColor = Color.FromArgb(240, 200, 200)
+            };
+            _btnClearImage.Click += (_, _) => ClearImage();
+            y += 36;
+
+            _picLayout = new PictureBox
+            {
+                Location = new Point(fieldX, y),
+                Width = 150,
+                Height = 100,
+                BorderStyle = BorderStyle.FixedSingle,
+                SizeMode = PictureBoxSizeMode.Zoom,
+                BackColor = Color.White
+            };
+            y += 108;
+
+            // ---------- Pallet ----------
+            _lblPallet = new Label { Text = "Pallet:", Location = new Point(labelX, y + 5), AutoSize = true };
+            _txtPallet = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = existing?.Pallet?.ToString() ?? "" };
             y += 42;
 
             // ---------- النقشة ----------
@@ -431,7 +625,7 @@ public class ProductsUserControl : UserControl
                 Text = "حفظ",
                 Width = 130,
                 Height = 38,
-                Location = new Point(340, y + 45),
+                Location = new Point(340, y + 40),
                 BackColor = Color.FromArgb(46, 160, 67),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
@@ -445,7 +639,7 @@ public class ProductsUserControl : UserControl
                 Text = "إلغاء",
                 Width = 130,
                 Height = 38,
-                Location = new Point(200, y + 45),
+                Location = new Point(200, y + 40),
                 FlatStyle = FlatStyle.Flat,
                 Cursor = Cursors.Hand
             };
@@ -454,43 +648,99 @@ public class ProductsUserControl : UserControl
             AcceptButton = btnSave;
             CancelButton = btnCancel;
 
-            // ---------- الإضافة إلى Controls (مهم!) ----------
-            Controls.Add(lblCategory);
-            Controls.Add(_cmbCategory);
+            // ---------- الإضافة إلى Controls ----------
+            Controls.Add(lblCategory); Controls.Add(_cmbCategory);
 
-            Controls.Add(_lblCode);
-            Controls.Add(_txtCode);
+            Controls.Add(_lblCode); Controls.Add(_txtCode);
+            Controls.Add(_lblName); Controls.Add(_txtName);
 
-            Controls.Add(_lblName);
-            Controls.Add(_txtName);
+            Controls.Add(_lblAh); Controls.Add(_txtAh);
+            Controls.Add(_lblL); Controls.Add(_txtL);
+            Controls.Add(_lblW); Controls.Add(_txtW);
+            Controls.Add(_lblH); Controls.Add(_txtH);
+            Controls.Add(_lblOh); Controls.Add(_txtOh);
 
-            Controls.Add(_lblPattern);
-            Controls.Add(_txtPattern);
+            Controls.Add(_lblLayout); Controls.Add(_txtLayout);
 
-            Controls.Add(lblSupplier);
-            Controls.Add(_cmbSupplier);
+            Controls.Add(_lblPicture);
+            Controls.Add(_btnPickImage);
+            Controls.Add(_btnClearImage);
+            Controls.Add(_picLayout);
+
+            Controls.Add(_lblPallet); Controls.Add(_txtPallet);
+
+            Controls.Add(_lblPattern); Controls.Add(_txtPattern);
+
+            Controls.Add(lblSupplier); Controls.Add(_cmbSupplier);
 
             Controls.Add(_lblStatus);
             Controls.Add(btnSave);
             Controls.Add(btnCancel);
 
+            if (!string.IsNullOrWhiteSpace(existing?.LayoutImageFilename))
+            {
+                _layoutImageFilename = existing!.LayoutImageFilename;
+                _picLayout.Image = LayoutStorage.TryLoadImage(_layoutImageFilename);
+            }
+
             UpdateFieldsByCategory();
         }
 
-        /// <summary>يُظهر/يُخفي الحقول حسب التصنيف المختار.</summary>
+        private static string FormatInt(decimal? value)
+            => value.HasValue ? ((long)value.Value).ToString() : "";
+
         private void UpdateFieldsByCategory()
         {
             bool isBattery = (_cmbCategory.SelectedItem as string) == "Batteries";
 
-            _lblCode.Visible = isBattery;
-            _txtCode.Visible = isBattery;
+            _lblCode.Visible = isBattery; _txtCode.Visible = isBattery;
+            _lblAh.Visible = isBattery; _txtAh.Visible = isBattery;
+            _lblL.Visible = isBattery; _txtL.Visible = isBattery;
+            _lblW.Visible = isBattery; _txtW.Visible = isBattery;
+            _lblH.Visible = isBattery; _txtH.Visible = isBattery;
+            _lblOh.Visible = isBattery; _txtOh.Visible = isBattery;
+            _lblLayout.Visible = isBattery; _txtLayout.Visible = isBattery;
+            _lblPicture.Visible = isBattery;
+            _btnPickImage.Visible = isBattery;
+            _btnClearImage.Visible = isBattery;
+            _picLayout.Visible = isBattery;
+            _lblPallet.Visible = isBattery; _txtPallet.Visible = isBattery;
 
-            _lblName.Visible = !isBattery;
-            _txtName.Visible = !isBattery;
-
-            _lblPattern.Visible = !isBattery;
-            _txtPattern.Visible = !isBattery;
+            _lblName.Visible = !isBattery; _txtName.Visible = !isBattery;
+            _lblPattern.Visible = !isBattery; _txtPattern.Visible = !isBattery;
         }
+
+        // ============ Image ============
+
+        private void PickImage()
+        {
+            using var ofd = new OpenFileDialog
+            {
+                Title = "اختر صورة الرسمة",
+                Filter = "Images|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp"
+            };
+            if (ofd.ShowDialog(this) != DialogResult.OK) return;
+
+            try
+            {
+                _layoutImageFilename = LayoutStorage.CopyToStorage(ofd.FileName);
+                _picLayout.Image?.Dispose();
+                _picLayout.Image = LayoutStorage.TryLoadImage(_layoutImageFilename);
+            }
+            catch (Exception ex)
+            {
+                _lblStatus.Text = "فشل تحميل الصورة: " + ex.Message;
+            }
+        }
+
+        private void ClearImage()
+        {
+            _layoutImageFilename = null;
+            _picLayout.Image?.Dispose();
+            _picLayout.Image = null;
+        }
+
+        // ============ Save ============
 
         private void OnSave(ProductRow? existing)
         {
@@ -504,10 +754,44 @@ public class ProductsUserControl : UserControl
                 var code = _txtCode.Text.Trim();
                 if (string.IsNullOrWhiteSpace(code)) { _lblStatus.Text = "كود البطارية مطلوب."; return; }
 
+                if (!TryParseNullableDecimalFromInt(_txtAh.Text, out var ah)) { _lblStatus.Text = "Ah يجب أن يكون عددًا صحيحًا."; return; }
+                if (!TryParseNullableDecimalFromInt(_txtL.Text, out var l))   { _lblStatus.Text = "L يجب أن يكون عددًا صحيحًا."; return; }
+                if (!TryParseNullableDecimalFromInt(_txtW.Text, out var w))   { _lblStatus.Text = "W يجب أن يكون عددًا صحيحًا."; return; }
+                if (!TryParseNullableDecimalFromInt(_txtH.Text, out var h))   { _lblStatus.Text = "H يجب أن يكون عددًا صحيحًا."; return; }
+                if (!TryParseNullableDecimalFromInt(_txtOh.Text, out var oh)) { _lblStatus.Text = "Oh يجب أن يكون عددًا صحيحًا."; return; }
+
+                if (!TryParseNullableInt(_txtLayout.Text, out var layout)) { _lblStatus.Text = "Layout يجب أن يكون عددًا صحيحًا."; return; }
+                if (!TryParseNullableInt(_txtPallet.Text, out var pallet)) { _lblStatus.Text = "Pallet يجب أن يكون عددًا صحيحًا."; return; }
+
                 if (existing == null)
-                    Result = new { category, code, name = code, supplierId = supplier.Id };
+                {
+                    Result = new
+                    {
+                        category,
+                        code,
+                        name = code,
+                        supplierId = supplier.Id,
+                        ah, l, w, h, oh,
+                        layout,
+                        layoutImageFilename = _layoutImageFilename,
+                        pallet
+                    };
+                }
                 else
-                    Result = new { id = existing.Id, category, code, name = code, supplierId = supplier.Id };
+                {
+                    Result = new
+                    {
+                        id = existing.Id,
+                        category,
+                        code,
+                        name = code,
+                        supplierId = supplier.Id,
+                        ah, l, w, h, oh,
+                        layout,
+                        layoutImageFilename = _layoutImageFilename,
+                        pallet
+                    };
+                }
             }
             else
             {
@@ -524,6 +808,23 @@ public class ProductsUserControl : UserControl
 
             DialogResult = DialogResult.OK;
             Close();
+        }
+
+        private static bool TryParseNullableInt(string text, out int? value)
+        {
+            value = null;
+            if (string.IsNullOrWhiteSpace(text)) return true;
+            if (int.TryParse(text.Trim(), out var v)) { value = v; return true; }
+            return false;
+        }
+
+        /// <summary>يستقبل إدخال عدد صحيح ويُعيده كـ decimal? (للتوافق مع DB).</summary>
+        private static bool TryParseNullableDecimalFromInt(string text, out decimal? value)
+        {
+            value = null;
+            if (string.IsNullOrWhiteSpace(text)) return true;
+            if (int.TryParse(text.Trim(), out var v)) { value = v; return true; }
+            return false;
         }
     }
 }
