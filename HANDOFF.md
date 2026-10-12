@@ -1,5 +1,5 @@
 HANDOFF — مشروع Invoice-CSharp
-آخر تحديث: 11 أكتوبر 2026
+آخر تحديث: 12 أكتوبر 2026
 الإصدار الحالي: نسخة تطويرية (لم تُرقّم بعد)
 مسار المشروع: C:\Users\ADNAN\projects\cost_profit\Invoice-CSharp
 
@@ -41,6 +41,7 @@ Excel                       ClosedXML 0.105.1
 dotnet-ef                   8.0.31 (أداة عامة)
 الواجهة                     WinForms (code-first — لا مصمم مرئي)
 المصادقة                    JWT + BCrypt ✅ مُنفَّذ
+التخويل (Authorization)     Policies مبنية على الصلاحيات ✅ مُنفَّذ
 النقل                       HTTP + JWT Bearer
 حزمة JWT                    Microsoft.AspNetCore.Authentication.JwtBearer 8.0.11
 حزمة BCrypt                 BCrypt.Net-Next 4.2.0
@@ -69,11 +70,11 @@ Invoice-CSharp/
 │   │       ├── InvoiceDiscount.cs
 │   │       ├── InvoiceExpense.cs
 │   │       ├── Settings.cs
-│   │       ├── User.cs               ← جديد (Auth)
-│   │       ├── Role.cs               ← جديد (Auth)
-│   │       ├── Permission.cs         ← جديد (Auth)
-│   │       ├── UserRole.cs           ← جديد (Auth)
-│   │       └── RolePermission.cs     ← جديد (Auth)
+│   │       ├── User.cs               (Auth)
+│   │       ├── Role.cs               (Auth)
+│   │       ├── Permission.cs         (Auth)
+│   │       ├── UserRole.cs           (Auth)
+│   │       └── RolePermission.cs     (Auth)
 │   │
 │   ├── Invoice.Application/          (class library)
 │   │   ├── Exceptions/
@@ -97,10 +98,6 @@ Invoice-CSharp/
 │   │   │   ├── AppDbContext.cs
 │   │   │   ├── DesignTimeDbContextFactory.cs
 │   │   │   └── Migrations/
-│   │   │       ├── 20261009005315_InitialCreate.cs
-│   │   │       ├── 20261009230747_AddSettingsTable.cs
-│   │   │       ├── 20261010225958_AddAuthTables.cs    ← جديد (Auth)
-│   │   │       └── AppDbContextModelSnapshot.cs
 │   │   ├── Exporters/
 │   │   │   ├── InvoicePdfExporter.cs
 │   │   │   ├── InvoiceExcelExporter.cs
@@ -113,29 +110,31 @@ Invoice-CSharp/
 │   │
 │   ├── Invoice.Api/                  (webapi)
 │   │   ├── Controllers/
-│   │   │   ├── SuppliersController.cs
-│   │   │   ├── ProductsController.cs
-│   │   │   ├── InvoicesController.cs
-│   │   │   ├── ReportsController.cs
-│   │   │   ├── ExportsController.cs
-│   │   │   ├── SettingsController.cs
-│   │   │   └── AuthController.cs                       ← جديد (Auth)
-│   │   ├── Data/                                       ← جديد (Auth)
-│   │   │   └── DataSeeder.cs
-│   │   ├── Dtos/                                       ← جديد (Auth)
+│   │   │   ├── SuppliersController.cs   ← [Authorize] + Policies ✅
+│   │   │   ├── ProductsController.cs    ← [Authorize] + Policies ✅
+│   │   │   ├── InvoicesController.cs    ← [Authorize] + Policies ✅
+│   │   │   ├── ReportsController.cs     ← [Authorize] + Policies ✅
+│   │   │   ├── ExportsController.cs     ← [Authorize] + Policies ✅
+│   │   │   ├── SettingsController.cs    ← [Authorize] + Policies ✅
+│   │   │   └── AuthController.cs
+│   │   ├── Data/
+│   │   │   └── DataSeeder.cs            ← 3 مستخدمين (admin/accountant/viewer)
+│   │   ├── Security/
+│   │   │   └── Permissions.cs           ← جديد (23 صلاحية كـ const)
+│   │   ├── Dtos/
 │   │   │   └── Auth/
 │   │   │       ├── LoginRequest.cs
 │   │   │       ├── LoginResponse.cs
 │   │   │       ├── UserInfoDto.cs
 │   │   │       ├── RefreshRequest.cs
 │   │   │       └── ChangePasswordRequest.cs
-│   │   ├── Services/                                   ← جديد (Auth)
+│   │   ├── Services/
 │   │   │   ├── JwtSettings.cs
 │   │   │   ├── IJwtService.cs
 │   │   │   ├── JwtService.cs
 │   │   │   ├── IPasswordHasher.cs
 │   │   │   └── BcryptPasswordHasher.cs
-│   │   ├── Program.cs
+│   │   ├── Program.cs                   ← 23 Policy مسجَّلة
 │   │   ├── appsettings.json
 │   │   └── appsettings.Development.json
 │   │
@@ -188,11 +187,11 @@ InvoiceItems            بنود الفواتير
 InvoicePayments         دفعات
 InvoiceDiscounts        خصومات
 InvoiceExpenses         مصاريف
-Users                   المستخدمون                      ← Auth
-Roles                   الأدوار (Admin, Accountant, Viewer)  ← Auth
-Permissions             الصلاحيات (resource.action)     ← Auth
-UserRoles               ربط مستخدم-دور (M2M)            ← Auth
-RolePermissions         ربط دور-صلاحية (M2M)            ← Auth
+Users                   المستخدمون                      (Auth)
+Roles                   الأدوار (Admin, Accountant, Viewer)  (Auth)
+Permissions             الصلاحيات (resource.action)     (Auth)
+UserRoles               ربط مستخدم-دور (M2M)            (Auth)
+RolePermissions         ربط دور-صلاحية (M2M)            (Auth)
 __EFMigrationsHistory   سجل EF (نظامي)
 
 4.3 مفاتيح Settings المستخدمة فعليًا
@@ -213,27 +212,27 @@ InvoiceItems.ProductId          → Products.Id        (Restrict)
 InvoicePayments.InvoiceId       → Invoices.Id        (Cascade)
 InvoiceDiscounts.InvoiceId      → Invoices.Id        (Cascade)
 InvoiceExpenses.InvoiceId       → Invoices.Id        (Cascade)
-UserRoles.UserId                → Users.Id           (Cascade)   ← Auth
-UserRoles.RoleId                → Roles.Id           (Cascade)   ← Auth
-RolePermissions.RoleId          → Roles.Id           (Cascade)   ← Auth
-RolePermissions.PermissionId    → Permissions.Id     (Cascade)   ← Auth
+UserRoles.UserId                → Users.Id           (Cascade)
+UserRoles.RoleId                → Roles.Id           (Cascade)
+RolePermissions.RoleId          → Roles.Id           (Cascade)
+RolePermissions.PermissionId    → Permissions.Id     (Cascade)
 
 4.5 فهارس فريدة
 ───────────────
 Suppliers.Code                  UNIQUE
 Products.Code                   UNIQUE
 Invoices.InvoiceNo              UNIQUE
-Users.Username                  UNIQUE                              ← Auth
-Roles.Name                      UNIQUE                              ← Auth
-Permissions.Code                UNIQUE                              ← Auth
+Users.Username                  UNIQUE
+Roles.Name                      UNIQUE
+Permissions.Code                UNIQUE
 
 4.6 حقول RowVersion
 ───────────────────
 - Suppliers
 - Products
 - Invoices
-- Users                                                          ← Auth
-- Roles                                                          ← Auth
+- Users
+- Roles
 
 ═══════════════════════════════════════════════════════════════
 5. قواعد العمل المُنفَّذة
@@ -277,8 +276,8 @@ profit_margin = (total_profit / total_sales) × 100
 - الخصومات ≤ المدفوعات.
 - total_usd > 0.
 
-5.5 المصادقة والصلاحيات (Auth) — ✅ مُنفَّذ
-──────────────────────────────────────────
+5.5 المصادقة والصلاحيات (Auth + Authorization) — ✅ مكتمل
+──────────────────────────────────────────────────────────
 - كلمات المرور: BCrypt (Work Factor = 12).
 - التوكنات: JWT HMAC-SHA256.
   - Access Token: 60 دقيقة.
@@ -293,11 +292,16 @@ profit_margin = (total_profit / total_sales) × 100
   - jti              → معرّف فريد للتوكن
 - الأدوار الافتراضية:
   - Admin       → 23 صلاحية (كل شيء)
-  - Accountant  → 16 صلاحية (كل شيء ما عدا users/roles/settings.update)
+  - Accountant  → 16 صلاحية (كل شيء ما عدا users.* + roles.* + settings.update)
   - Viewer      → 6 صلاحيات (قراءة فقط)
 - الصلاحيات بصيغة resource.action.
-- مستخدم admin افتراضي: admin / admin123
-  ⚠️ يُنصح بتغييرها فورًا بعد أول تسجيل دخول.
+- كل نقطة API محمية بـ [Authorize] + Policy (ما عدا /api/auth/login و /refresh).
+
+المستخدمون الافتراضيون (DataSeeder):
+  - admin      / admin123  → Admin      (23 صلاحية)
+  - accountant / acct123   → Accountant (16 صلاحية)
+  - viewer     / view123   → Viewer     (6 صلاحيات)
+  ⚠️ يُنصح بتغيير كلمات المرور فورًا في الإنتاج.
 
 ═══════════════════════════════════════════════════════════════
 6. الصلاحيات المعرَّفة (23 صلاحية)
@@ -322,46 +326,51 @@ roles       read, update                                 2
 - Viewer      → 6/23  (suppliers.read, products.read, invoices.read,
                        reports.read, exports.read, settings.read)
 
+ملفات مرجعية:
+- تعريف الأكواد: src/Invoice.Api/Security/Permissions.cs (const + All[])
+- تسجيل Policies: src/Invoice.Api/Program.cs (foreach على Permissions.All)
+- الاستخدام: [Authorize(Policy = Permissions.InvoicesCreate)] على الأكشن.
+
 ═══════════════════════════════════════════════════════════════
-7. API المُنفَّذ (كل النقاط مُختبَرة)
+7. API المُنفَّذ (كل النقاط مُختبَرة + محمية)
 ═══════════════════════════════════════════════════════════════
 
 7.1 Suppliers (/api/suppliers)
 ──────────────────────────────
-Method  Path          الوصف
-──────  ────────────  ─────────────────────────────
-GET     /             كل الموردين
-GET     /{id}         مورد واحد
-POST    /             إنشاء
-PUT     /{id}         تعديل
-DELETE  /{id}         حذف (يُمنع إن له أصناف/فواتير)
+Method  Path          Policy
+──────  ────────────  ─────────────────────
+GET     /             suppliers.read
+GET     /{id}         suppliers.read
+POST    /             suppliers.create
+PUT     /{id}         suppliers.update
+DELETE  /{id}         suppliers.delete
 
 7.2 Products (/api/products)
 ────────────────────────────
-Method  Path          الوصف
-──────  ────────────  ─────────────────────────────
-GET     /             كل الأصناف (بحث + فلترة)
-GET     /{id}         صنف واحد
-POST    /             إنشاء (مع قواعد البطارية/الإطار)
-PUT     /{id}         تعديل
-DELETE  /{id}         حذف (يُمنع إن استُخدم في فاتورة)
+Method  Path          Policy
+──────  ────────────  ─────────────────────
+GET     /             products.read
+GET     /{id}         products.read
+POST    /             products.create
+PUT     /{id}         products.update
+DELETE  /{id}         products.delete
 
 7.3 Invoices (/api/invoices)
 ────────────────────────────
-Method  Path                  الوصف
-──────  ────────────────────  ─────────────────────────────
-GET     /                     الفواتير (فلترة status/supplierId/date)
-GET     /{id}                 فاتورة كاملة (projection)
-GET     next-number           الرقم التالي
-POST    calculate             حساب معاينة بدون حفظ
-POST    /                     إنشاء مسودة
-PUT     /{id}                 تعديل مسودة
-POST    /{id}/archive         أرشفة
-POST    /{id}/duplicate       تكرار كمسودة جديدة
-DELETE  /{id}                 حذف (cascade)
+Method  Path                  Policy
+──────  ────────────────────  ─────────────────────
+GET     /                     invoices.read
+GET     /{id}                 invoices.read
+GET     next-number           invoices.create
+POST    calculate             invoices.create
+POST    /                     invoices.create
+PUT     /{id}                 invoices.update
+POST    /{id}/archive         invoices.archive
+POST    /{id}/duplicate       invoices.create
+DELETE  /{id}                 invoices.delete
 
-7.4 Auth (/api/auth) — ✅ جديد
-──────────────────────────────
+7.4 Auth (/api/auth)
+────────────────────
 Method  Path                Auth              الوصف
 ──────  ──────────────────  ────────────────  ────────────────────────
 POST    login               AllowAnonymous    تسجيل دخول → Access + Refresh + UserInfo
@@ -371,24 +380,24 @@ POST    change-password     [Authorize]       تغيير كلمة المرور
 
 7.5 Reports (/api/reports) — 7 نقاط
 ────────────────────────────────────
-Method  Path                          الوصف
+Method  Path                          Policy
 ──────  ────────────────────────────  ─────────────────────
-GET     dashboard                     KPIs عامة
-GET     supplier/{id}                 تقرير مورد
-GET     profit                        تقرير الأرباح
-GET     period                        تقرير فترة (dateFrom/dateTo)
-GET     price-changes/{productId}     تغيّر أسعار صنف
-GET     most-profitable               الأكثر ربحية
-GET     best-selling                  الأكثر مبيعًا
+GET     dashboard                     reports.read
+GET     supplier/{id}                 reports.read
+GET     profit                        reports.read
+GET     period                        reports.read
+GET     price-changes/{productId}     reports.read
+GET     most-profitable               reports.read
+GET     best-selling                  reports.read
 
 7.6 Exports (/api/exports)
 ──────────────────────────
-Method  Path                       الوصف
-──────  ─────────────────────────  ─────────────────────────────
-GET     invoice/{id}/pdf           تنزيل فاتورة PDF
-GET     invoice/{id}/excel         تنزيل فاتورة Excel
-GET     report/{type}/pdf          تصدير تقرير PDF (7 أنواع)
-GET     report/{type}/excel        تصدير تقرير Excel (7 أنواع)
+Method  Path                       Policy
+──────  ─────────────────────────  ─────────────────────
+GET     invoice/{id}/pdf           exports.read
+GET     invoice/{id}/excel         exports.read
+GET     report/{type}/pdf          exports.read
+GET     report/{type}/excel        exports.read
 
 أنواع التقارير المدعومة في report/{type}:
 dashboard, supplier, profit, period, price-changes, most-profitable, best-selling
@@ -398,16 +407,16 @@ period, supplierId, productId, category, topN, dateFrom, dateTo
 
 7.7 Settings (/api/settings)
 ────────────────────────────
-Method  Path       الوصف
-──────  ─────────  ──────────────────────────────────
-GET     /          كل الإعدادات
-PUT     /          حفظ دفعة مفتاح/قيمة
-POST    /logo      رفع شعار الشركة (multipart، حقل "file")
-GET     /logo      استرجاع شعار الشركة الحالي
-DELETE  /logo      حذف شعار الشركة الحالي
+Method  Path       Policy
+──────  ─────────  ─────────────────────
+GET     /          settings.read
+PUT     /          settings.update
+POST    /logo      settings.update
+GET     /logo      settings.read
+DELETE  /logo      settings.update
 
 ═══════════════════════════════════════════════════════════════
-8. تدفق المصادقة (Authentication Flow)
+8. تدفق المصادقة والتخويل
 ═══════════════════════════════════════════════════════════════
 
 8.1 تسجيل الدخول
@@ -419,7 +428,7 @@ Response 200:
 {
   "accessToken": "eyJhbGc...",
   "refreshToken": "eyJhbGc...",
-  "accessTokenExpiresAt": "2026-10-11T00:57:07Z",
+  "accessTokenExpiresAt": "2026-10-12T01:00:00Z",
   "user": {
     "id": 1,
     "username": "admin",
@@ -456,13 +465,25 @@ Body: { "refreshToken": "eyJhbGc..." }
 
 Response: نفس شكل login (Access جديد + Refresh جديد).
 
-8.4 قواعد الأمان المطبَّقة
+8.4 دورة الطلب المحمي
+─────────────────────
+Request بدون Authorization
+    → 401 Unauthorized (Challenge)
+Request مع Bearer توكن صالح
+    → يُنشأ ClaimsPrincipal
+    → يُقيَّم [Authorize(Policy=...)]
+        → إذا الـ claim "permission" موجود → 200/201/204
+        → إذا مفقود → 403 Forbidden
+
+8.5 قواعد الأمان المطبَّقة
 ──────────────────────────
 - رسالة موحّدة لفشل login (منع user enumeration).
 - ClockSkew = TimeSpan.Zero (لا تسامح في انتهاء الصلاحية).
 - Jwt:Key يجب ≥ 32 حرفًا (HMAC-SHA256).
 - Work Factor = 12 لـ BCrypt (~250ms لكل hash).
 - Refresh Token لا يُقبل كنقطة دخول.
+- Policies مبنية على claim "permission" (resource.action).
+- كل الـ Controllers القديمة محمية بـ [Authorize] على مستوى الكلاس + Policy على مستوى الأكشن.
 
 ═══════════════════════════════════════════════════════════════
 9. مكان تخزين الشعار
@@ -478,7 +499,7 @@ Response: نفس شكل login (Access جديد + Refresh جديد).
 
 الفرع:               main
 آخر Commit:          يُحدَّث بعد commit HANDOFF
-عدد Commits:         ~35
+عدد Commits:         ~36
 ريموت:               لا يوجد (GitHub لم يُربط بعد)
 
 أوامر Git المستخدمة
@@ -501,6 +522,10 @@ git show --stat HEAD
 ✅ إعادة ترتيب PDF/Excel بالكامل (PDF صفحتان، Excel ورقتان)
 ✅ المصادقة الكاملة (JWT + BCrypt)
 ✅ Seed تلقائي (admin + 3 أدوار + 23 صلاحية)
+✅ حماية كل نقاط API القديمة بـ [Authorize] + Policies
+✅ اختبار 401 (بدون توكن) — كل النقاط
+✅ اختبار 200/201 (بتوكن Admin/Accountant)
+✅ اختبار 403 (Viewer يكتب / Accountant يعدّل settings)
 
 11.2 نواقص عامة
 ───────────────
@@ -510,11 +535,9 @@ git show --stat HEAD
 ⚠️ لا ربط WinForms بالـ API — Desktop ما زال فارغًا.
 ⚠️ لا تمييز بين بطاريات الرصاص والليثيوم (لم يُطلب).
 ⚠️ لا حقل "موقع الكتروني" للمورد.
-⚠️ نقاط API القديمة (Suppliers/Products/Invoices/Reports/Exports/Settings)
-   لا تحتوي [Authorize] بعد — قابلة للإضافة لاحقًا.
-⚠️ لا Policies مبنية على الصلاحيات (resource.action) — قابلة للإضافة.
+⚠️ لا Controllers لإدارة Users/Roles (users.* و roles.* معرّفة كصلاحيات لكن لا تُستخدم في أي Controller).
 ⚠️ Jwt:Key في appsettings.json مكشوف — يجب نقله إلى متغيرات البيئة في الإنتاج.
-⚠️ كلمة مرور admin الافتراضية admin123 ضعيفة — يجب تغييرها فورًا.
+⚠️ كلمات مرور المستخدمين الافتراضية ضعيفة — يجب تغييرها فورًا في الإنتاج.
 
 ═══════════════════════════════════════════════════════════════
 12. أولويات العمل القادم
@@ -523,11 +546,9 @@ git show --stat HEAD
 المسار المتفق عليه (أولوية عالية)
 ─────────────────────────────────
 ~~1. Auth + JWT + Users + Roles~~ ✅ مكتمل
+~~2. حماية نقاط API القديمة بـ [Authorize] + Policies~~ ✅ مكتمل
 
-2. ⏭️ حماية نقاط API القديمة بـ [Authorize] + Policies
-   (خطوة موصى بها قبل Desktop — تجعل النظام آمنًا بالكامل)
-
-3. WinForms Desktop (الخطوة الكبيرة):
+3. ⏭️ WinForms Desktop (الخطوة الكبيرة):
    a. ApiClient (HttpClient مركزي يحمل التوكن + تجديد تلقائي)
    b. LoginForm
    c. MainForm
@@ -543,6 +564,7 @@ git show --stat HEAD
 4. Import من Excel
 5. Backup/Restore
 6. Audit Log
+7. (اختياري) UsersController + RolesController لإدارة المستخدمين والأدوار.
 
 أولوية منخفضة
 ─────────────
@@ -571,8 +593,8 @@ Y          (إن طُلب تأكيد)
 ─────────
 dotnet build Invoice.sln
 
-تنظيف كامل (عند الشك بمشاكل cache)
-──────────────────────────────────
+تنظيف كامل (عند الشك بمشاكل cache أو ملف مقفول)
+──────────────────────────────────────────────
 taskkill /F /IM dotnet.exe
 dotnet clean Invoice.sln
 dotnet build Invoice.sln
@@ -604,9 +626,9 @@ dotnet test tests/Invoice.Tests/Invoice.Tests.csproj --filter "FullyQualifiedNam
 ───────────────
 sqlcmd -S localhost\SQLEXPRESS -E -d InvoiceDb -C -Q "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE' ORDER BY TABLE_NAME"
 
-فحص مستخدمي النظام
-──────────────────
-sqlcmd -S localhost\SQLEXPRESS -E -d InvoiceDb -C -Q "SELECT Id, Username, FullName, IsActive FROM Users"
+فحص مستخدمي النظام + أدوارهم
+───────────────────────────
+sqlcmd -S localhost\SQLEXPRESS -E -d InvoiceDb -C -Q "SELECT u.Id, u.Username, r.Name AS RoleName FROM Users u LEFT JOIN UserRoles ur ON ur.UserId=u.Id LEFT JOIN Roles r ON r.Id=ur.RoleId ORDER BY u.Id"
 
 فحص الأدوار والصلاحيات
 ──────────────────────
@@ -615,8 +637,12 @@ sqlcmd -S localhost\SQLEXPRESS -E -d InvoiceDb -C -Q "SELECT r.Name, COUNT(rp.Pe
 اختبار تسجيل دخول (PowerShell)
 ──────────────────────────────
 $body = @{ username = "admin"; password = "admin123" } | ConvertTo-Json
-$r = Invoke-WebRequest -Uri "http://localhost:5124/api/auth/login" -Method POST -ContentType "application/json" -Body $body
-$r.StatusCode
+$login = Invoke-RestMethod -Uri "http://localhost:5124/api/auth/login" -Method POST -ContentType "application/json" -Body $body
+$headers = @{ Authorization = "Bearer $($login.accessToken)" }
+
+اختبار حماية نقطة بدون توكن
+──────────────────────────
+try { Invoke-WebRequest -Uri "http://localhost:5124/api/suppliers" -UseBasicParsing } catch { $_.Exception.Response.StatusCode.value__ }
 
 حفظ في Git
 ──────────
@@ -636,7 +662,9 @@ git add . ; git commit -m "message"
 النتائج            total_usd=500، net_cost=6300، total_sales=7500، profit=1200، margin=16%
 إعدادات الشركة     اسم/عنوان/هاتف/إيميل/موقع (تم إدخالها)
 شعار الشركة        %LOCALAPPDATA%\CostProfitApp\Uploads\company\logo.png
-مستخدم النظام      admin / admin123 (دور Admin، 23 صلاحية)
+مستخدمو النظام     admin / admin123 (Admin، 23 صلاحية)
+                   accountant / acct123 (Accountant، 16 صلاحية)
+                   viewer / view123 (Viewer، 6 صلاحيات)
 أدوار النظام       Admin (23)، Accountant (16)، Viewer (6)
 صلاحيات النظام     23 صلاحية بصيغة resource.action
 
@@ -656,6 +684,7 @@ git add . ; git commit -m "message"
 ✅ إن كان التعديل على جزء من ملف، اذكر القسم بدقة، ثم أعطِ الملف كاملًا.
 ✅ عند التحقق من قاعدة البيانات، استخدم sqlcmd بعد تشغيل الخادم.
 ✅ لا تفترض أن أمرًا نُفّذ — اطلب الناتج الفعلي (لا الصورة، لا الأمر).
+✅ أمر واحد فقط في كل رسالة، وملف واحد فقط في كل رسالة.
 
 ═══════════════════════════════════════════════════════════════
 16. نماذج رسائل جاهزة
@@ -692,61 +721,62 @@ Application                     ✅ مستقر                            ✅
 Infrastructure (DB)             ✅ مستقر                            ✅
 Infrastructure (PDF)            ✅ يعمل مع العربية + الشعار         ✅
 Infrastructure (Excel)          ✅ يعمل مع الحدود + الشعار          ✅
-API — Suppliers                 ✅ مستقر                            ✅
-API — Products                  ✅ مستقر                            ✅
-API — Invoices                  ✅ مستقر                            ✅
-API — Reports                   ✅ 7 تقارير                         ✅
-API — Exports (فواتير)          ✅ PDF + Excel                      ✅
-API — Exports (تقارير)          ✅ PDF + Excel (7 أنواع)            ✅
-API — Settings                  ✅ مستقر + شعار                     ✅
+API — Suppliers                 ✅ محمي بـ [Authorize]              ✅
+API — Products                  ✅ محمي بـ [Authorize]              ✅
+API — Invoices                  ✅ محمي بـ [Authorize]              ✅
+API — Reports                   ✅ محمي بـ [Authorize]              ✅
+API — Exports                   ✅ محمي بـ [Authorize]              ✅
+API — Settings                  ✅ محمي بـ [Authorize]              ✅
 API — Auth (JWT)                ✅ login/refresh/me/change-pass     ✅
-DataSeeder                      ✅ ينشئ admin + 3 أدوار + 23 صلاحية ✅
+Authorization Policies          ✅ 23 Policy + 403 على النقصان      ✅
+DataSeeder                      ✅ ينشئ 3 مستخدمين + 3 أدوار + 23 صلاحية ✅
 Desktop                         ⚪ لم يُعدّل                         ❌
 
 التقييم العام:
-الخادم جاهز وظيفيًا للإنتاج في بيئة LAN مع مصادقة JWT كاملة.
-تطبيق سطح المكتب لم يبدأ بعد.
+الخادم آمن وظيفيًا وجاهز للإنتاج في بيئة LAN:
+- مصادقة JWT كاملة.
+- تخويل (Policies) على كل نقطة.
+Desktop لم يبدأ بعد.
 
 ═══════════════════════════════════════════════════════════════
 18. نقطة الاستئناف الحالية
 ═══════════════════════════════════════════════════════════════
 
-الحالة: Auth + JWT مكتمل بنجاح ✅
+الحالة: الخيار (أ) مكتمل ✅ — الـ API محمي بالكامل.
 
-ما تم إنجازه (10 خطوات من القسم السابق):
-────────────────────────────────────────
-1.  ✅ كيانات المصادقة في Domain (User, Role, Permission, UserRole, RolePermission)
-2.  ✅ تهيئة العلاقات في AppDbContext (M2M + فهارس + RowVersion)
-3.  ✅ Migration AddAuthTables + تطبيقه على القاعدة
-4.  ✅ تثبيت Microsoft.AspNetCore.Authentication.JwtBearer 8.0.11
-5.  ✅ إعدادات JWT في appsettings.json
-6.  ✅ JwtService (توليد Access + Refresh + التحقق)
-7.  ✅ DTOs + BcryptPasswordHasher (BCrypt 4.2.0)
-8.  ✅ AuthController (login, refresh, me, change-password)
-9.  ✅ تفعيل Middleware في Program.cs + Swagger Bearer
-10. ✅ DataSeeder + اختبار كامل عبر Swagger و PowerShell
+ما تم إنجازه (الخيار أ):
+────────────────────────
+1.  ✅ Permissions.cs — 23 صلاحية كـ const + All[].
+2.  ✅ Program.cs — تسجيل 23 Policy (RequireClaim "permission").
+3.  ✅ SuppliersController — [Authorize] + Policy على كل أكشن.
+4.  ✅ ProductsController — [Authorize] + Policy على كل أكشن.
+5.  ✅ InvoicesController — [Authorize] + Policy على كل أكشن.
+6.  ✅ ReportsController — [Authorize] + Policy على كل أكشن.
+7.  ✅ ExportsController — [Authorize] + Policy على كل أكشن.
+8.  ✅ SettingsController — [Authorize] + Policy على كل أكشن.
+9.  ✅ DataSeeder — أضاف accountant + viewer كمستخدمي اختبار.
+10. ✅ اختبار كامل:
+       - بدون توكن → 401 على كل النقاط.
+       - Admin (23 صلاحية) → 200/201 على كل النقاط.
+       - Viewer (6 صلاحيات) → 200 قراءة، 403 كتابة.
+       - Accountant (16 صلاحية) → 201 على suppliers، 403 على settings.update.
 
-القرارات التقنية المطبَّقة في Auth:
-──────────────────────────────────
-- تخزين كلمات المرور:      BCrypt.Net-Next 4.2.0 (Work Factor = 12)
-- Tokens:                   JWT HMAC-SHA256
-                            Access: 60 دقيقة | Refresh: 7 أيام
-- Issuer / Audience:        Invoice.Api / Invoice.Desktop
-- الأدوار:                  Admin (23)، Accountant (16)، Viewer (6)
-- الصلاحيات:                صيغة resource.action
-- مستخدم افتراضي:           admin / admin123
-- Middleware Order:         UseAuthentication → UseAuthorization
-- Swagger Security:         Bearer scheme مُعرَّف + SecurityRequirement عام
+المهمة القادمة (مُوصى بها):
+──────────────────────────
+**البدء بتطبيق WinForms Desktop — الخيار (ب) سابقًا.**
 
-المهمة القادمة (اختر):
-──────────────────────
-الخيار أ (مُوصى به):
-حماية نقاط API القديمة (Suppliers, Products, Invoices, Reports,
-Exports, Settings) بـ [Authorize] + Policies للصلاحيات.
-
-الخيار ب:
-البدء بتطبيق WinForms Desktop — ApiClient + LoginForm + MainForm
-+ 7 صفحات UserControl.
+الترتيب المقترح:
+1. ApiClient (HttpClient مركزي + تخزين التوكن + تجديد تلقائي).
+2. LoginForm (بسيط — username/password + اتصال بـ /api/auth/login).
+3. MainForm (يستضيف UserControls).
+4. 7 صفحات UserControl:
+   - Dashboard (KPIs من /api/reports/dashboard)
+   - Suppliers (CRUD)
+   - Products (CRUD)
+   - Invoice (الأعقد — Calculate → Save → Archive)
+   - Archive (قائمة الفواتير المؤرشفة)
+   - Reports (7 تقارير + تصدير PDF/Excel)
+   - Settings (مفتاح/قيمة + رفع شعار)
 
 نهاية HANDOFF.
 

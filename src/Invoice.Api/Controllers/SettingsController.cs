@@ -1,6 +1,8 @@
+using Invoice.Api.Security;
 using Invoice.Domain.Entities;
 using Invoice.Infrastructure.Persistence;
 using Invoice.Infrastructure.Storage;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,9 +10,11 @@ namespace Invoice.Api.Controllers;
 
 /// <summary>
 /// نقاط نهاية API للإعدادات — مخزن مفتاح/قيمة + رفع شعار الشركة.
+/// القراءة تتطلب settings.read، والتعديل يتطلب settings.update.
 /// </summary>
 [ApiController]
 [Route("api/settings")]
+[Authorize]
 public class SettingsController : ControllerBase
 {
     private const string LogoPathKey = "company_logo_path";
@@ -28,6 +32,7 @@ public class SettingsController : ControllerBase
 
     /// <summary>جلب كل الإعدادات كمفتاح/قيمة.</summary>
     [HttpGet]
+    [Authorize(Policy = Permissions.SettingsRead)]
     public async Task<ActionResult> GetAll()
     {
         var settings = await _db.Settings
@@ -39,6 +44,7 @@ public class SettingsController : ControllerBase
 
     /// <summary>حفظ/تحديث مجموعة من الإعدادات دفعة واحدة.</summary>
     [HttpPut]
+    [Authorize(Policy = Permissions.SettingsUpdate)]
     public async Task<ActionResult> UpdateAll([FromBody] Dictionary<string, string> values)
     {
         if (values == null || values.Count == 0)
@@ -77,6 +83,7 @@ public class SettingsController : ControllerBase
 
     /// <summary>رفع شعار الشركة (multipart/form-data، حقل اسمه "file").</summary>
     [HttpPost("logo")]
+    [Authorize(Policy = Permissions.SettingsUpdate)]
     [RequestSizeLimit(5 * 1024 * 1024)] // 5 MB
     public async Task<IActionResult> UploadLogo(IFormFile file)
     {
@@ -130,6 +137,7 @@ public class SettingsController : ControllerBase
 
     /// <summary>استرجاع شعار الشركة الحالي (صورة).</summary>
     [HttpGet("logo")]
+    [Authorize(Policy = Permissions.SettingsRead)]
     public async Task<IActionResult> GetLogo()
     {
         var path = await _db.Settings
@@ -151,6 +159,7 @@ public class SettingsController : ControllerBase
 
     /// <summary>حذف شعار الشركة الحالي (من القرص ومن قاعدة البيانات).</summary>
     [HttpDelete("logo")]
+    [Authorize(Policy = Permissions.SettingsUpdate)]
     public async Task<IActionResult> DeleteLogo()
     {
         var existing = await _db.Settings.FindAsync(LogoPathKey);

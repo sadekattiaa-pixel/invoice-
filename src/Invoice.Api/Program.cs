@@ -1,5 +1,6 @@
 using System.Text;
 using Invoice.Api.Data;
+using Invoice.Api.Security;
 using Invoice.Api.Services;
 using Invoice.Infrastructure.Persistence;
 using Invoice.Infrastructure.Services;
@@ -54,7 +55,19 @@ builder.Services
         };
     });
 
-builder.Services.AddAuthorization();
+// ============ Authorization + Policies ============
+// كل صلاحية (resource.action) تصبح Policy بنفس الاسم.
+// مثال: [Authorize(Policy = Permissions.InvoicesCreate)]
+//   → يشترط أن يكون المستخدم مُصادَقًا وأن يحمل claim "permission" = "invoices.create".
+builder.Services.AddAuthorization(options =>
+{
+    foreach (var permission in Permissions.All)
+    {
+        options.AddPolicy(permission, policy =>
+            policy.RequireAuthenticatedUser()
+                  .RequireClaim("permission", permission));
+    }
+});
 
 // ============ Controllers ============
 builder.Services.AddControllers();

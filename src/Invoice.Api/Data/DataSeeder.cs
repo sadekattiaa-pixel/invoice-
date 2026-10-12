@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Invoice.Api.Data;
 
 /// <summary>
-/// تهيئة بيانات أولية — صلاحيات، أدوار، مستخدم admin افتراضي.
+/// تهيئة بيانات أولية — صلاحيات، أدوار، مستخدمون افتراضيون.
 /// آمنة عند التكرار: تتجاهل ما هو موجود مسبقًا.
 /// </summary>
 public static class DataSeeder
@@ -16,6 +16,14 @@ public static class DataSeeder
 
     /// <summary>كلمة مرور admin الافتراضية — غيّرها بعد أول تسجيل دخول.</summary>
     public const string DefaultAdminPassword = "admin123";
+
+    /// <summary>مستخدم اختبار بدور Accountant.</summary>
+    public const string TestAccountantUsername = "accountant";
+    public const string TestAccountantPassword = "acct123";
+
+    /// <summary>مستخدم اختبار بدور Viewer.</summary>
+    public const string TestViewerUsername = "viewer";
+    public const string TestViewerPassword = "view123";
 
     /// <summary>تعريفات الصلاحيات (الكود، الاسم المعروض، التصنيف).</summary>
     private static readonly (string Code, string Name, string Category)[] PermissionDefinitions =
@@ -72,7 +80,12 @@ public static class DataSeeder
         var permissionByCode = await SeedPermissionsAsync(db);
         var roleByName = await SeedRolesAsync(db);
         await LinkRolePermissionsAsync(db, permissionByCode, roleByName);
-        await SeedAdminUserAsync(db, hasher, roleByName["Admin"]);
+        await SeedUserAsync(db, hasher, roleByName["Admin"],
+            DefaultAdminUsername, DefaultAdminPassword, "مدير النظام");
+        await SeedUserAsync(db, hasher, roleByName["Accountant"],
+            TestAccountantUsername, TestAccountantPassword, "محاسب تجريبي");
+        await SeedUserAsync(db, hasher, roleByName["Viewer"],
+            TestViewerUsername, TestViewerPassword, "عارض تجريبي");
     }
 
     // ============ Permissions ============
@@ -177,11 +190,9 @@ public static class DataSeeder
 
         var currentPermissionIds = currentLinks.Select(rp => rp.PermissionId).ToHashSet();
 
-        // حذف الصلاحيات الزائدة
         foreach (var link in currentLinks.Where(rp => !desiredPermissionIds.Contains(rp.PermissionId)))
             db.RolePermissions.Remove(link);
 
-        // إضافة الصلاحيات الناقصة
         foreach (var pid in desiredPermissionIds.Where(pid => !currentPermissionIds.Contains(pid)))
         {
             db.RolePermissions.Add(new RolePermission
@@ -193,30 +204,36 @@ public static class DataSeeder
         }
     }
 
-    // ============ Admin User ============
+    // ============ Users ============
 
-    private static async Task SeedAdminUserAsync(AppDbContext db, IPasswordHasher hasher, Role adminRole)
+    private static async Task SeedUserAsync(
+        AppDbContext db,
+        IPasswordHasher hasher,
+        Role role,
+        string username,
+        string password,
+        string fullName)
     {
-        var exists = await db.Users.AnyAsync(u => u.Username == DefaultAdminUsername);
+        var exists = await db.Users.AnyAsync(u => u.Username == username);
         if (exists)
             return;
 
-        var admin = new User
+        var user = new User
         {
-            Username = DefaultAdminUsername,
-            PasswordHash = hasher.Hash(DefaultAdminPassword),
-            FullName = "مدير النظام",
+            Username = username,
+            PasswordHash = hasher.Hash(password),
+            FullName = fullName,
             IsActive = true,
             CreatedAt = DateTime.UtcNow
         };
 
-        db.Users.Add(admin);
+        db.Users.Add(user);
         await db.SaveChangesAsync();
 
         db.UserRoles.Add(new UserRole
         {
-            UserId = admin.Id,
-            RoleId = adminRole.Id,
+            UserId = user.Id,
+            RoleId = role.Id,
             AssignedAt = DateTime.UtcNow
         });
         await db.SaveChangesAsync();

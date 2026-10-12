@@ -1,4 +1,6 @@
+using Invoice.Api.Security;
 using Invoice.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,9 +8,11 @@ namespace Invoice.Api.Controllers;
 
 /// <summary>
 /// نقاط نهاية API للتقارير والإحصائيات.
+/// كل نقطة تتطلب صلاحية reports.read.
 /// </summary>
 [ApiController]
 [Route("api/reports")]
+[Authorize]
 public class ReportsController : ControllerBase
 {
     private readonly AppDbContext _db;
@@ -23,6 +27,7 @@ public class ReportsController : ControllerBase
     // ============================================================
 
     [HttpGet("dashboard")]
+    [Authorize(Policy = Permissions.ReportsRead)]
     public async Task<ActionResult> GetDashboard([FromQuery] string period = "year")
     {
         var (from, to) = GetPeriodRange(period);
@@ -56,6 +61,7 @@ public class ReportsController : ControllerBase
     // ============================================================
 
     [HttpGet("supplier/{supplierId:int}")]
+    [Authorize(Policy = Permissions.ReportsRead)]
     public async Task<ActionResult> GetSupplierReport(
         int supplierId,
         [FromQuery] string period = "year")
@@ -129,6 +135,7 @@ public class ReportsController : ControllerBase
     // ============================================================
 
     [HttpGet("profit")]
+    [Authorize(Policy = Permissions.ReportsRead)]
     public async Task<ActionResult> GetProfitReport(
         [FromQuery] string period = "year",
         [FromQuery] int? supplierId = null)
@@ -191,6 +198,7 @@ public class ReportsController : ControllerBase
     // ============================================================
 
     [HttpGet("period")]
+    [Authorize(Policy = Permissions.ReportsRead)]
     public async Task<ActionResult> GetPeriodReport(
         [FromQuery] DateOnly dateFrom,
         [FromQuery] DateOnly dateTo,
@@ -249,6 +257,7 @@ public class ReportsController : ControllerBase
     // ============================================================
 
     [HttpGet("price-changes/{productId:int}")]
+    [Authorize(Policy = Permissions.ReportsRead)]
     public async Task<ActionResult> GetPriceChangesReport(
         int productId,
         [FromQuery] string period = "year")
@@ -345,6 +354,7 @@ public class ReportsController : ControllerBase
     /// category = "" يعني كل التصنيفات.
     /// </summary>
     [HttpGet("most-profitable")]
+    [Authorize(Policy = Permissions.ReportsRead)]
     public async Task<ActionResult> GetMostProfitableReport(
         [FromQuery] string period = "year",
         [FromQuery] string? category = null,
@@ -363,7 +373,6 @@ public class ReportsController : ControllerBase
         if (!string.IsNullOrWhiteSpace(category))
             itemsQuery = itemsQuery.Where(ii => ii.Product != null && ii.Product.Category == category);
 
-        // التجميع حسب الصنف
         var grouped = await itemsQuery
             .GroupBy(ii => new
             {
@@ -387,7 +396,6 @@ public class ReportsController : ControllerBase
             .OrderByDescending(x => x.totalProfit)
             .ToListAsync();
 
-        // نطبّق topN بعد جلب القائمة (لأننا نحتاج حساب الهامش لكل صنف أولاً)
         var finalList = topN > 0 ? grouped.Take(topN).ToList() : grouped;
 
         var products = finalList.Select(p => new
@@ -403,7 +411,6 @@ public class ReportsController : ControllerBase
             margin = p.totalSales > 0m ? (p.totalProfit / p.totalSales) * 100m : 0m
         }).ToList();
 
-        // الإحصائيات العامة (على كل الأصناف بغض النظر عن topN)
         var totalProfitAll = grouped.Sum(p => p.totalProfit);
         var productsCount = grouped.Count;
         var avgMarginAll = products.Any() ? products.Average(p => p.margin) : 0m;
@@ -437,6 +444,7 @@ public class ReportsController : ControllerBase
     /// category = "" يعني كل التصنيفات.
     /// </summary>
     [HttpGet("best-selling")]
+    [Authorize(Policy = Permissions.ReportsRead)]
     public async Task<ActionResult> GetBestSellingReport(
         [FromQuery] string period = "year",
         [FromQuery] string? category = null,

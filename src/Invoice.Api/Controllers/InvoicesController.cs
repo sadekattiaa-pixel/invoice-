@@ -1,7 +1,9 @@
+using Invoice.Api.Security;
 using Invoice.Application.Calculations;
 using Invoice.Application.Dtos;
 using Invoice.Application.Exceptions;
 using Invoice.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using InvoiceEntity = Invoice.Domain.Entities.Invoice;
@@ -14,9 +16,11 @@ namespace Invoice.Api.Controllers;
 
 /// <summary>
 /// نقاط نهاية API للفواتير — إنشاء، تعديل، أرشفة، حذف، تكرار.
+/// كل نقطة تتطلب صلاحية من نوع invoices.*
 /// </summary>
 [ApiController]
 [Route("api/invoices")]
+[Authorize]
 public class InvoicesController : ControllerBase
 {
     private readonly AppDbContext _db;
@@ -32,6 +36,7 @@ public class InvoicesController : ControllerBase
 
     /// <summary>جلب الفواتير مع الفلترة والبحث.</summary>
     [HttpGet]
+    [Authorize(Policy = Permissions.InvoicesRead)]
     public async Task<ActionResult> GetAll(
         [FromQuery] string? status,
         [FromQuery] string? search,
@@ -89,6 +94,7 @@ public class InvoicesController : ControllerBase
 
     /// <summary>جلب فاتورة واحدة بكل بياناتها (بدون علاقات دائرية).</summary>
     [HttpGet("{id:long}")]
+    [Authorize(Policy = Permissions.InvoicesRead)]
     public async Task<ActionResult> GetById(long id)
     {
         var invoice = await _db.Invoices
@@ -103,7 +109,6 @@ public class InvoicesController : ControllerBase
         if (invoice == null)
             return NotFound(new { message = "الفاتورة غير موجودة." });
 
-        // نبني كائنًا بسيطًا بدون back-references لتفادي الدورات
         var response = new
         {
             invoice.Id,
@@ -186,6 +191,7 @@ public class InvoicesController : ControllerBase
 
     /// <summary>الحصول على رقم الفاتورة التالي المتوقع.</summary>
     [HttpGet("next-number")]
+    [Authorize(Policy = Permissions.InvoicesCreate)]
     public async Task<ActionResult> GetNextNumber()
     {
         var number = await GenerateInvoiceNumberAsync();
@@ -197,6 +203,7 @@ public class InvoicesController : ControllerBase
     // ============================================================
 
     [HttpPost("calculate")]
+    [Authorize(Policy = Permissions.InvoicesCreate)]
     public async Task<ActionResult> Calculate([FromBody] InvoiceSaveRequest request)
     {
         try
@@ -218,10 +225,12 @@ public class InvoicesController : ControllerBase
     // ============================================================
 
     [HttpPost]
+    [Authorize(Policy = Permissions.InvoicesCreate)]
     public Task<ActionResult> Create([FromBody] InvoiceSaveRequest request)
         => SaveOrUpdateAsync(null, request);
 
     [HttpPut("{id:long}")]
+    [Authorize(Policy = Permissions.InvoicesUpdate)]
     public Task<ActionResult> Update(long id, [FromBody] InvoiceSaveRequest request)
         => SaveOrUpdateAsync(id, request);
 
@@ -230,6 +239,7 @@ public class InvoicesController : ControllerBase
     // ============================================================
 
     [HttpPost("{id:long}/archive")]
+    [Authorize(Policy = Permissions.InvoicesArchive)]
     public async Task<ActionResult> Archive(long id, [FromBody] InvoiceSaveRequest request)
     {
         try
@@ -274,6 +284,7 @@ public class InvoicesController : ControllerBase
     // ============================================================
 
     [HttpPost("{id:long}/duplicate")]
+    [Authorize(Policy = Permissions.InvoicesCreate)]
     public async Task<ActionResult> Duplicate(long id)
     {
         var original = await _db.Invoices
@@ -318,6 +329,7 @@ public class InvoicesController : ControllerBase
     // ============================================================
 
     [HttpDelete("{id:long}")]
+    [Authorize(Policy = Permissions.InvoicesDelete)]
     public async Task<IActionResult> Delete(long id)
     {
         var invoice = await _db.Invoices.FindAsync(id);

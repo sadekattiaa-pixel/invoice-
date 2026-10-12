@@ -1,8 +1,10 @@
+using Invoice.Api.Security;
 using Invoice.Application.Dtos;
 using Invoice.Infrastructure.Exporters;
 using Invoice.Infrastructure.Persistence;
 using Invoice.Infrastructure.Services;
 using Invoice.Infrastructure.Storage;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,9 +12,11 @@ namespace Invoice.Api.Controllers;
 
 /// <summary>
 /// نقاط نهاية API لتصدير الفواتير والتقارير إلى PDF و Excel.
+/// كل نقطة تتطلب صلاحية exports.read.
 /// </summary>
 [ApiController]
 [Route("api/exports")]
+[Authorize]
 public class ExportsController : ControllerBase
 {
     private readonly AppDbContext _db;
@@ -30,6 +34,7 @@ public class ExportsController : ControllerBase
 
     /// <summary>تنزيل فاتورة كملف PDF.</summary>
     [HttpGet("invoice/{id:long}/pdf")]
+    [Authorize(Policy = Permissions.ExportsRead)]
     public async Task<IActionResult> ExportInvoicePdf(long id)
     {
         var invoice = await LoadInvoiceAsync(id);
@@ -54,6 +59,7 @@ public class ExportsController : ControllerBase
 
     /// <summary>تنزيل فاتورة كملف Excel.</summary>
     [HttpGet("invoice/{id:long}/excel")]
+    [Authorize(Policy = Permissions.ExportsRead)]
     public async Task<IActionResult> ExportInvoiceExcel(long id)
     {
         var invoice = await LoadInvoiceAsync(id);
@@ -88,6 +94,7 @@ public class ExportsController : ControllerBase
     /// most-profitable, best-selling.
     /// </summary>
     [HttpGet("report/{type}/pdf")]
+    [Authorize(Policy = Permissions.ExportsRead)]
     public async Task<IActionResult> ExportReportPdf(
         string type,
         [FromQuery] string period = "year",
@@ -130,6 +137,7 @@ public class ExportsController : ControllerBase
 
     /// <summary>تصدير أي تقرير إلى Excel.</summary>
     [HttpGet("report/{type}/excel")]
+    [Authorize(Policy = Permissions.ExportsRead)]
     public async Task<IActionResult> ExportReportExcel(
         string type,
         [FromQuery] string period = "year",

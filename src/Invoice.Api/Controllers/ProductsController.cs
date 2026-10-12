@@ -1,5 +1,7 @@
+using Invoice.Api.Security;
 using Invoice.Domain.Entities;
 using Invoice.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,9 +9,11 @@ namespace Invoice.Api.Controllers;
 
 /// <summary>
 /// نقاط نهاية API للأصناف — CRUD كامل مع قواعد العمل.
+/// كل نقطة تتطلب صلاحية من نوع products.*
 /// </summary>
 [ApiController]
 [Route("api/products")]
+[Authorize]
 public class ProductsController : ControllerBase
 {
     private static readonly string[] AllowedCategories =
@@ -24,6 +28,7 @@ public class ProductsController : ControllerBase
 
     /// <summary>جلب الأصناف مع إمكانية البحث والفلترة.</summary>
     [HttpGet]
+    [Authorize(Policy = Permissions.ProductsRead)]
     public async Task<ActionResult<List<Product>>> GetAll(
         [FromQuery] string? search,
         [FromQuery] string? category,
@@ -59,6 +64,7 @@ public class ProductsController : ControllerBase
 
     /// <summary>جلب صنف واحد بالمعرّف.</summary>
     [HttpGet("{id:int}")]
+    [Authorize(Policy = Permissions.ProductsRead)]
     public async Task<ActionResult<Product>> GetById(int id)
     {
         var product = await _db.Products
@@ -74,6 +80,7 @@ public class ProductsController : ControllerBase
 
     /// <summary>إنشاء صنف جديد مع التحقق من قواعد العمل.</summary>
     [HttpPost]
+    [Authorize(Policy = Permissions.ProductsCreate)]
     public async Task<ActionResult<Product>> Create([FromBody] Product product)
     {
         if (!AllowedCategories.Contains(product.Category))
@@ -139,6 +146,7 @@ public class ProductsController : ControllerBase
 
     /// <summary>تعديل صنف موجود.</summary>
     [HttpPut("{id:int}")]
+    [Authorize(Policy = Permissions.ProductsUpdate)]
     public async Task<IActionResult> Update(int id, [FromBody] Product product)
     {
         if (id != product.Id)
@@ -227,6 +235,7 @@ public class ProductsController : ControllerBase
 
     /// <summary>حذف صنف (مع منع الحذف إن كان مستخدمًا في فاتورة).</summary>
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = Permissions.ProductsDelete)]
     public async Task<IActionResult> Delete(int id)
     {
         var product = await _db.Products.FindAsync(id);
