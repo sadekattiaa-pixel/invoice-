@@ -1,16 +1,31 @@
+using Invoice.Desktop.Forms;
+
 namespace Invoice.Desktop;
 
-static class Program
+internal static class Program
 {
     /// <summary>
-    ///  The main entry point for the application.
+    /// نقطة الدخول — تُشغّل حلقة: LoginForm → MainForm.
+    /// عند تسجيل الخروج أو انتهاء الجلسة تُعاد الحلقة إلى LoginForm.
+    /// عند إلغاء تسجيل الدخول يخرج التطبيق.
     /// </summary>
     [STAThread]
     static void Main()
     {
-        // To customize application configuration such as set high DPI settings or default font,
-        // see https://aka.ms/applicationconfiguration.
         ApplicationConfiguration.Initialize();
-        System.Windows.Forms.Application.Run(new Form1());
-    }    
+
+        while (true)
+        {
+            using var login = new LoginForm();
+            if (login.ShowDialog() != DialogResult.OK)
+                return; // إلغاء تسجيل الدخول → خروج
+
+            using var main = new MainForm();
+            var result = main.ShowDialog();
+
+            // Retry = تسجيل خروج أو انتهاء جلسة → نُعيد الحلقة
+            if (result != DialogResult.Retry)
+                return;
+        }
+    }
 }
