@@ -10,6 +10,7 @@ namespace Invoice.Infrastructure.Exporters;
 
 /// <summary>
 /// يُولّد ملف PDF للفاتورة بالعربية باستخدام QuestPDF.
+/// الصفحة في وضع Portrait (عمودي).
 /// صفحة 1: الشعار + الشركة + المورد + الفاتورة + الأصناف + الملاحظات
 /// صفحة 2: المدفوعات + الخصومات + المصاريف + الملخص
 ///
@@ -19,11 +20,10 @@ namespace Invoice.Infrastructure.Exporters;
 public static class InvoicePdfExporter
 {
     // ============================================================
-    // مفاتيح الإخفاء — يجب مطابقتها مع Desktop و ExportsController
+    // مفاتيح الإخفاء
     // ============================================================
     public static class Keys
     {
-        // ============ أجزاء الصفحة ============
         public const string Logo         = "logo";
         public const string CompanyInfo  = "company_info";
         public const string SupplierInfo = "supplier_info";
@@ -34,7 +34,6 @@ public static class InvoicePdfExporter
         public const string Expenses     = "expenses";
         public const string Summary      = "summary";
 
-        // ============ أعمدة جدول الأصناف (21 عمودًا) ============
         public const string ItemsLineNo            = "items.line_no";
         public const string ItemsCode              = "items.code";
         public const string ItemsAh                = "items.ah";
@@ -57,7 +56,6 @@ public static class InvoicePdfExporter
         public const string ItemsUnitProfit        = "items.unit_profit";
         public const string ItemsTotalProfit       = "items.total_profit";
 
-        // ============ مفاتيح قديمة (للتوافق الخلفي) ============
         public const string ItemsProduct = "items.product";
     }
 
@@ -67,9 +65,6 @@ public static class InvoicePdfExporter
         QuestPDF.Settings.UseSystemFonts = true;
     }
 
-    /// <summary>
-    /// يُنشئ ملف PDF للفاتورة في المسار المحدد.
-    /// </summary>
     public static void Export(
         InvoiceEntity invoice,
         CompanyInfoDto company,
@@ -88,7 +83,7 @@ public static class InvoicePdfExporter
         var expenses = invoice.Expenses.OrderBy(e => e.LineNo).ToList();
         var supplier = invoice.Supplier;
 
-        // ============ تحميل صور الأصناف من القرص مسبقًا ============
+        // ============ تحميل صور الأصناف ============
         var imageCache = new Dictionary<int, byte[]?>();
         foreach (var item in items)
         {
@@ -96,40 +91,36 @@ public static class InvoicePdfExporter
             if (imageCache.ContainsKey(pid)) continue;
 
             var path = item.Product?.LayoutImageFilename;
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                imageCache[pid] = null;
-                continue;
-            }
-
-            var bytes = ProductImageStorage.ReadBytesAsync(path).GetAwaiter().GetResult();
-            imageCache[pid] = bytes;
+            imageCache[pid] = string.IsNullOrWhiteSpace(path)
+                ? null
+                : ProductImageStorage.ReadBytesAsync(path).GetAwaiter().GetResult();
         }
 
-        // ============ أعمدة جدول الأصناف (21 عمودًا) ============
+        // ============ أعمدة جدول الأصناف ============
+        // HeaderText مُختصر لأن الصفحة Portrait (عرض ضيق).
         var allItemColumns = new List<ItemColumn>
         {
-            new(Keys.ItemsLineNo,           "#",                0.5f, item => item.LineNo.ToString()),
-            new(Keys.ItemsCode,             "الكود",            1.8f, item => item.Product?.Code ?? "—"),
-            new(Keys.ItemsAh,               "AH",               0.7f, item => item.Product?.Ah?.ToString("0.##") ?? ""),
-            new(Keys.ItemsL,                "L",                0.6f, item => item.Product?.L?.ToString("0.##") ?? ""),
-            new(Keys.ItemsW,                "W",                0.6f, item => item.Product?.W?.ToString("0.##") ?? ""),
-            new(Keys.ItemsH,                "H",                0.6f, item => item.Product?.H?.ToString("0.##") ?? ""),
-            new(Keys.ItemsOh,               "OH",               0.7f, item => item.Product?.Oh?.ToString("0.##") ?? ""),
-            new(Keys.ItemsLayout,           "LAYOUT",           0.9f, item => item.Product?.Layout?.ToString() ?? ""),
-            new(Keys.ItemsImage,            "الصورة",           0.9f, _ => "",      item => imageCache.GetValueOrDefault(item.ProductId)),
-            new(Keys.ItemsPallet,           "PALLET",           0.8f, item => item.Product?.Pallet?.ToString() ?? ""),
-            new(Keys.ItemsCategory,         "التصنيف",          1.2f, item => item.Product?.Category ?? ""),
-            new(Keys.ItemsPattern,          "النقشة",           1.3f, item => item.Product?.Pattern ?? ""),
-            new(Keys.ItemsQuantity,         "الكمية",           1.0f, item => item.Quantity.ToString("0.##")),
-            new(Keys.ItemsPurchaseUsd,      "الشراء $",         1.3f, item => item.PurchaseUsd.ToString("N2")),
-            new(Keys.ItemsTotalPurchaseUsd, "اجمالي الشراء $",  1.6f, item => (item.Quantity * item.PurchaseUsd).ToString("N2")),
-            new(Keys.ItemsPurchaseDzd,      "التكلفة",          1.4f, item => item.PurchaseDzd.ToString("N2")),
-            new(Keys.ItemsTotalDzd,         "اجمالي التكلفة",   1.6f, item => item.TotalDzd.ToString("N2")),
-            new(Keys.ItemsSaleDzd,          "البيع",            1.4f, item => item.SaleDzd.ToString("N2")),
-            new(Keys.ItemsTotalSale,        "اجمالي البيع",     1.6f, item => item.TotalSale.ToString("N2")),
-            new(Keys.ItemsUnitProfit,       "الربح",            1.4f, item => item.UnitProfit.ToString("N2")),
-            new(Keys.ItemsTotalProfit,      "اجمالي الربح",     1.6f, item => item.TotalProfit.ToString("N2")),
+            new(Keys.ItemsLineNo,           "#",           0.4f, item => item.LineNo.ToString()),
+            new(Keys.ItemsCode,             "الكود",       1.6f, item => item.Product?.Code ?? "—"),
+            new(Keys.ItemsAh,               "AH",          0.6f, item => item.Product?.Ah?.ToString("0.##") ?? ""),
+            new(Keys.ItemsL,                "L",           0.5f, item => item.Product?.L?.ToString("0.##") ?? ""),
+            new(Keys.ItemsW,                "W",           0.5f, item => item.Product?.W?.ToString("0.##") ?? ""),
+            new(Keys.ItemsH,                "H",           0.5f, item => item.Product?.H?.ToString("0.##") ?? ""),
+            new(Keys.ItemsOh,               "OH",          0.6f, item => item.Product?.Oh?.ToString("0.##") ?? ""),
+            new(Keys.ItemsLayout,           "LAYOUT",      0.8f, item => item.Product?.Layout?.ToString() ?? ""),
+            new(Keys.ItemsImage,            "صورة",        0.8f, _ => "",   item => imageCache.GetValueOrDefault(item.ProductId)),
+            new(Keys.ItemsPallet,           "PALLET",      0.7f, item => item.Product?.Pallet?.ToString() ?? ""),
+            new(Keys.ItemsCategory,         "تصنيف",       1.0f, item => item.Product?.Category ?? ""),
+            new(Keys.ItemsPattern,          "نقشة",        1.1f, item => item.Product?.Pattern ?? ""),
+            new(Keys.ItemsQuantity,         "كمية",        0.8f, item => item.Quantity.ToString("0.##")),
+            new(Keys.ItemsPurchaseUsd,      "$ شراء",      1.0f, item => item.PurchaseUsd.ToString("N2")),
+            new(Keys.ItemsTotalPurchaseUsd, "$ إجمالي",    1.2f, item => (item.Quantity * item.PurchaseUsd).ToString("N2")),
+            new(Keys.ItemsPurchaseDzd,      "التكلفة",     1.1f, item => item.PurchaseDzd.ToString("N2")),
+            new(Keys.ItemsTotalDzd,         "إجمالي تكلفة", 1.2f, item => item.TotalDzd.ToString("N2")),
+            new(Keys.ItemsSaleDzd,          "البيع",       1.1f, item => item.SaleDzd.ToString("N2")),
+            new(Keys.ItemsTotalSale,        "إجمالي بيع",  1.2f, item => item.TotalSale.ToString("N2")),
+            new(Keys.ItemsUnitProfit,       "الربح",       1.1f, item => item.UnitProfit.ToString("N2")),
+            new(Keys.ItemsTotalProfit,      "إجمالي ربح",  1.2f, item => item.TotalProfit.ToString("N2")),
         };
 
         var visibleItemColumns = allItemColumns
@@ -146,9 +137,9 @@ public static class InvoicePdfExporter
         {
             container.Page(page =>
             {
-                page.Size(PageSizes.A4.Landscape());
-                page.Margin(1f, Unit.Centimetre);
-                page.DefaultTextStyle(x => x.FontSize(9).FontFamily("Arial"));
+                page.Size(PageSizes.A4);           // ← Portrait
+                page.Margin(0.8f, Unit.Centimetre);
+                page.DefaultTextStyle(x => x.FontSize(8).FontFamily("Arial"));
 
                 page.Content().Column(contentCol =>
                 {
@@ -165,34 +156,34 @@ public static class InvoicePdfExporter
                             {
                                 if (company.LogoBytes != null && company.LogoBytes.Length > 0)
                                 {
-                                    row.ConstantItem(120)
+                                    row.ConstantItem(100)
                                         .AlignTop().AlignLeft()
-                                        .Height(90)
+                                        .Height(70)
                                         .Image(company.LogoBytes).FitArea();
                                 }
                                 else
                                 {
-                                    row.ConstantItem(120);
+                                    row.ConstantItem(100);
                                 }
                             }
 
                             if (!IsHidden(Keys.CompanyInfo))
                             {
                                 row.RelativeItem()
-                                    .PaddingLeft(IsHidden(Keys.Logo) ? 0 : 15)
+                                    .PaddingLeft(IsHidden(Keys.Logo) ? 0 : 12)
                                     .AlignTop()
                                     .Column(col =>
                                     {
                                         if (!string.IsNullOrWhiteSpace(company.Name))
-                                            col.Item().Text(company.Name).FontSize(14).Bold();
+                                            col.Item().Text(company.Name).FontSize(12).Bold();
                                         if (!string.IsNullOrWhiteSpace(company.Address))
-                                            col.Item().Text(company.Address).FontSize(9);
+                                            col.Item().Text(company.Address).FontSize(8);
                                         if (!string.IsNullOrWhiteSpace(company.Phone))
-                                            col.Item().Text(company.Phone).FontSize(9);
+                                            col.Item().Text(company.Phone).FontSize(8);
                                         if (!string.IsNullOrWhiteSpace(company.Email))
-                                            col.Item().Text(company.Email).FontSize(9);
+                                            col.Item().Text(company.Email).FontSize(8);
                                         if (!string.IsNullOrWhiteSpace(company.Website))
-                                            col.Item().Text(company.Website).FontSize(9);
+                                            col.Item().Text(company.Website).FontSize(8);
                                     });
                             }
                         });
@@ -201,7 +192,7 @@ public static class InvoicePdfExporter
                     // ----- بيانات المورد + بيانات الفاتورة -----
                     if (!IsHidden(Keys.SupplierInfo) || !IsHidden(Keys.InvoiceInfo))
                     {
-                        contentCol.Item().PaddingTop(15).Row(row =>
+                        contentCol.Item().PaddingTop(12).Row(row =>
                         {
                             if (!IsHidden(Keys.SupplierInfo))
                             {
@@ -210,13 +201,13 @@ public static class InvoicePdfExporter
                                     if (supplier != null)
                                     {
                                         if (!string.IsNullOrWhiteSpace(supplier.Name))
-                                            col.Item().Text(supplier.Name).FontSize(9);
+                                            col.Item().Text(supplier.Name).FontSize(8);
                                         if (!string.IsNullOrWhiteSpace(supplier.Address))
-                                            col.Item().Text(supplier.Address).FontSize(9);
+                                            col.Item().Text(supplier.Address).FontSize(8);
                                         if (!string.IsNullOrWhiteSpace(supplier.Phone))
-                                            col.Item().Text(supplier.Phone).FontSize(9);
+                                            col.Item().Text(supplier.Phone).FontSize(8);
                                         if (!string.IsNullOrWhiteSpace(supplier.Email))
-                                            col.Item().Text(supplier.Email).FontSize(9);
+                                            col.Item().Text(supplier.Email).FontSize(8);
                                     }
                                 });
                             }
@@ -226,12 +217,12 @@ public static class InvoicePdfExporter
                                 row.RelativeItem().AlignTop().Column(col =>
                                 {
                                     col.Item().AlignRight()
-                                        .Text(invoice.InvoiceDate.ToString("yyyy-MM-dd")).FontSize(9);
+                                        .Text(invoice.InvoiceDate.ToString("yyyy-MM-dd")).FontSize(8);
                                     col.Item().AlignRight()
-                                        .Text(invoice.InvoiceNo).FontSize(9);
+                                        .Text(invoice.InvoiceNo).FontSize(8);
                                     if (!string.IsNullOrWhiteSpace(invoice.SupplierInvoiceNo))
                                         col.Item().AlignRight()
-                                            .Text(invoice.SupplierInvoiceNo).FontSize(9);
+                                            .Text(invoice.SupplierInvoiceNo).FontSize(8);
                                 });
                             }
                         });
@@ -240,16 +231,16 @@ public static class InvoicePdfExporter
                     // ----- جدول الأصناف -----
                     if (visibleItemColumns.Any() && items.Any())
                     {
-                        contentCol.Item().PaddingTop(15).Text("جدول الأصناف").FontSize(12).Bold();
+                        contentCol.Item().PaddingTop(12).Text("جدول الأصناف").FontSize(11).Bold();
 
-                        contentCol.Item().PaddingTop(6).Table(table =>
+                        contentCol.Item().PaddingTop(5).Table(table =>
                         {
                             table.ColumnsDefinition(columns =>
                             {
                                 foreach (var c in visibleItemColumns)
                                 {
                                     if (c.Key == Keys.ItemsLineNo)
-                                        columns.ConstantColumn(25);
+                                        columns.ConstantColumn(20);
                                     else
                                         columns.RelativeColumn(c.Weight);
                                 }
@@ -260,7 +251,7 @@ public static class InvoicePdfExporter
                                 void H(string text) =>
                                     header.Cell().Background(Colors.Grey.Lighten2)
                                         .Border(0.5f).BorderColor(Colors.Black)
-                                        .Padding(3).AlignCenter().Text(text).Bold().FontSize(8);
+                                        .Padding(1.5f).AlignCenter().Text(text).Bold().FontSize(7);
 
                                 foreach (var c in visibleItemColumns)
                                     H(c.Header);
@@ -272,21 +263,20 @@ public static class InvoicePdfExporter
                                 {
                                     var cell = table.Cell()
                                         .Border(0.5f).BorderColor(Colors.Black)
-                                        .Padding(2)
+                                        .Padding(1)
                                         .AlignCenter();
 
-                                    // ===== عمود الصورة =====
                                     if (c.ImageBytes != null)
                                     {
                                         var bytes = c.ImageBytes(item);
                                         if (bytes != null && bytes.Length > 0)
-                                            cell.Height(40).Image(bytes).FitArea();
+                                            cell.Height(30).Image(bytes).FitArea();
                                         else
-                                            cell.Text("").FontSize(8);
+                                            cell.Text("").FontSize(7);
                                     }
                                     else
                                     {
-                                        cell.Padding(3).Text(c.Value(item)).FontSize(8);
+                                        cell.Padding(1.5f).Text(c.Value(item)).FontSize(7);
                                     }
                                 }
                             }
@@ -296,8 +286,8 @@ public static class InvoicePdfExporter
                     // ----- الملاحظات -----
                     if (!IsHidden(Keys.Notes) && !string.IsNullOrWhiteSpace(invoice.Notes))
                     {
-                        contentCol.Item().PaddingTop(12).Text("ملاحظات").FontSize(11).Bold();
-                        contentCol.Item().PaddingTop(4).Text(invoice.Notes).FontSize(9);
+                        contentCol.Item().PaddingTop(10).Text("ملاحظات").FontSize(10).Bold();
+                        contentCol.Item().PaddingTop(3).Text(invoice.Notes).FontSize(8);
                     }
 
                     if (needPage2)
@@ -307,12 +297,11 @@ public static class InvoicePdfExporter
                     // ========== الصفحة 2 ==========
                     // ============================================
 
-                    // ----- المدفوعات -----
                     if (!IsHidden(Keys.Payments) && payments.Any())
                     {
-                        contentCol.Item().Text("المدفوعات").FontSize(12).Bold();
+                        contentCol.Item().Text("المدفوعات").FontSize(11).Bold();
 
-                        contentCol.Item().PaddingTop(6).Table(table =>
+                        contentCol.Item().PaddingTop(5).Table(table =>
                         {
                             table.ColumnsDefinition(columns =>
                             {
@@ -322,25 +311,24 @@ public static class InvoicePdfExporter
 
                             foreach (var p in payments)
                             {
-                                table.Cell().Padding(3).Text(p.Label ?? "—").FontSize(9);
-                                table.Cell().Padding(3).AlignRight()
-                                    .Text($"{p.Amount:N2}").FontSize(9);
+                                table.Cell().Padding(2).Text(p.Label ?? "—").FontSize(8);
+                                table.Cell().Padding(2).AlignRight()
+                                    .Text($"{p.Amount:N2}").FontSize(8);
                             }
 
-                            table.Cell().Padding(3).Text("الإجمالي").Bold().FontSize(9);
-                            table.Cell().Padding(3).AlignRight()
-                                .Text($"{invoice.TotalPayments:N2}").Bold().FontSize(9);
+                            table.Cell().Padding(2).Text("الإجمالي").Bold().FontSize(8);
+                            table.Cell().Padding(2).AlignRight()
+                                .Text($"{invoice.TotalPayments:N2}").Bold().FontSize(8);
                         });
 
-                        contentCol.Item().PaddingTop(10);
+                        contentCol.Item().PaddingTop(8);
                     }
 
-                    // ----- الخصومات -----
                     if (!IsHidden(Keys.Discounts) && discounts.Any())
                     {
-                        contentCol.Item().Text("الخصومات").FontSize(12).Bold();
+                        contentCol.Item().Text("الخصومات").FontSize(11).Bold();
 
-                        contentCol.Item().PaddingTop(6).Table(table =>
+                        contentCol.Item().PaddingTop(5).Table(table =>
                         {
                             table.ColumnsDefinition(columns =>
                             {
@@ -350,25 +338,24 @@ public static class InvoicePdfExporter
 
                             foreach (var d in discounts)
                             {
-                                table.Cell().Padding(3).Text(d.Label ?? "—").FontSize(9);
-                                table.Cell().Padding(3).AlignRight()
-                                    .Text($"{d.Amount:N2}").FontSize(9);
+                                table.Cell().Padding(2).Text(d.Label ?? "—").FontSize(8);
+                                table.Cell().Padding(2).AlignRight()
+                                    .Text($"{d.Amount:N2}").FontSize(8);
                             }
 
-                            table.Cell().Padding(3).Text("الإجمالي").Bold().FontSize(9);
-                            table.Cell().Padding(3).AlignRight()
-                                .Text($"{invoice.TotalDiscounts:N2}").Bold().FontSize(9);
+                            table.Cell().Padding(2).Text("الإجمالي").Bold().FontSize(8);
+                            table.Cell().Padding(2).AlignRight()
+                                .Text($"{invoice.TotalDiscounts:N2}").Bold().FontSize(8);
                         });
 
-                        contentCol.Item().PaddingTop(10);
+                        contentCol.Item().PaddingTop(8);
                     }
 
-                    // ----- المصاريف -----
                     if (!IsHidden(Keys.Expenses) && expenses.Any())
                     {
-                        contentCol.Item().Text("المصاريف").FontSize(12).Bold();
+                        contentCol.Item().Text("المصاريف").FontSize(11).Bold();
 
-                        contentCol.Item().PaddingTop(6).Table(table =>
+                        contentCol.Item().PaddingTop(5).Table(table =>
                         {
                             table.ColumnsDefinition(columns =>
                             {
@@ -378,25 +365,24 @@ public static class InvoicePdfExporter
 
                             foreach (var e in expenses)
                             {
-                                table.Cell().Padding(3).Text(e.Label).FontSize(9);
-                                table.Cell().Padding(3).AlignRight()
-                                    .Text($"{e.Amount:N2}").FontSize(9);
+                                table.Cell().Padding(2).Text(e.Label).FontSize(8);
+                                table.Cell().Padding(2).AlignRight()
+                                    .Text($"{e.Amount:N2}").FontSize(8);
                             }
 
-                            table.Cell().Padding(3).Text("الإجمالي").Bold().FontSize(9);
-                            table.Cell().Padding(3).AlignRight()
-                                .Text($"{invoice.TotalExpenses:N2}").Bold().FontSize(9);
+                            table.Cell().Padding(2).Text("الإجمالي").Bold().FontSize(8);
+                            table.Cell().Padding(2).AlignRight()
+                                .Text($"{invoice.TotalExpenses:N2}").Bold().FontSize(8);
                         });
 
-                        contentCol.Item().PaddingTop(10);
+                        contentCol.Item().PaddingTop(8);
                     }
 
-                    // ----- الملخص -----
                     if (!IsHidden(Keys.Summary))
                     {
-                        contentCol.Item().PaddingTop(8).Text("الملخص").FontSize(12).Bold();
+                        contentCol.Item().PaddingTop(6).Text("الملخص").FontSize(11).Bold();
 
-                        contentCol.Item().PaddingTop(6).Table(table =>
+                        contentCol.Item().PaddingTop(5).Table(table =>
                         {
                             table.ColumnsDefinition(columns =>
                             {
@@ -406,10 +392,10 @@ public static class InvoicePdfExporter
 
                             void Row(string label, string value, bool bold = false)
                             {
-                                var labelCell = table.Cell().Padding(3).Text(label).FontSize(9);
+                                var labelCell = table.Cell().Padding(2).Text(label).FontSize(8);
                                 if (bold) labelCell.Bold();
 
-                                var valueCell = table.Cell().Padding(3).AlignRight().Text(value).FontSize(9);
+                                var valueCell = table.Cell().Padding(2).AlignRight().Text(value).FontSize(8);
                                 if (bold) valueCell.Bold();
                             }
 
