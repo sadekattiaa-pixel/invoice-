@@ -192,6 +192,52 @@ public sealed class ApiClient
     }
 
     // ============================================================
+    // Product Images
+    // ============================================================
+
+    /// <summary>رفع صورة صنف إلى الخادم (multipart).</summary>
+    public async Task UploadProductImageAsync(int productId, byte[] bytes, string fileName, string contentType)
+    {
+        await PostMultipartAsync($"products/{productId}/image", "file", fileName, bytes, contentType);
+    }
+
+    /// <summary>حذف صورة صنف من الخادم (يتجاهل 404).</summary>
+    public async Task DeleteProductImageAsync(int productId)
+    {
+        try
+        {
+            using var resp = await SendWithRefreshAsync(() =>
+                BuildRequest(HttpMethod.Delete, $"products/{productId}/image"));
+            // 404 مقبول: لا توجد صورة لحذفها
+            if (resp.StatusCode == HttpStatusCode.NotFound) return;
+            await EnsureSuccessAsync(resp);
+        }
+        catch (ApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            // نتجاهل
+        }
+    }
+
+    /// <summary>
+    /// تنزيل صورة صنف من الخادم. يُرجع null إن لم توجد صورة (404).
+    /// </summary>
+    public async Task<byte[]?> DownloadProductImageAsync(int productId)
+    {
+        try
+        {
+            using var resp = await SendWithRefreshAsync(() =>
+                BuildRequest(HttpMethod.Get, $"products/{productId}/image"));
+            if (resp.StatusCode == HttpStatusCode.NotFound) return null;
+            if (!resp.IsSuccessStatusCode) return null;
+            return await resp.Content.ReadAsByteArrayAsync();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    // ============================================================
     // Internals
     // ============================================================
 

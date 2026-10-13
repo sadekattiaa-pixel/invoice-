@@ -1,9 +1,11 @@
+using System.Text.Json;
 using Invoice.Desktop.Services;
 
 namespace Invoice.Desktop.UserControls;
 
 /// <summary>
 /// صفحة الأصناف — قائمة + بحث + فلترة + إضافة + تعديل + حذف + اختيار الأعمدة.
+/// الصور تُخزَّن على الخادم (ProductImageStorage)، وتُحمَّل إلى cache محلي للعرض.
 /// </summary>
 public class ProductsUserControl : UserControl
 {
@@ -22,6 +24,9 @@ public class ProductsUserControl : UserControl
 
     private List<ProductRow> _allData = new();
     private List<SupplierItem> _suppliers = new();
+
+    /// <summary>cache الصور — المفتاح: ProductId، القيمة: Image أو null.</summary>
+    private readonly Dictionary<int, Image?> _imageCache = new();
 
     private bool _suppressWidthSave = false;
 
@@ -117,7 +122,7 @@ public class ProductsUserControl : UserControl
             Font = new Font("Segoe UI", 10F),
             ColumnHeadersHeight = 36,
             EnableHeadersVisualStyles = false,
-            ScrollBars = ScrollBars.Both   // بند 4: تمرير أفقي ورأسي
+            ScrollBars = ScrollBars.Both
         };
         _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(30, 60, 120);
         _grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
@@ -204,15 +209,22 @@ public class ProductsUserControl : UserControl
         if (e.ColumnIndex < 0 || e.ColumnIndex >= _grid.Columns.Count) return;
         if (_grid.Columns[e.ColumnIndex].Name != "LayoutImage") return;
 
-        var filename = e.Value as string;
-        if (string.IsNullOrWhiteSpace(filename))
+        if (e.RowIndex < 0 || e.RowIndex >= _grid.Rows.Count)
         {
             e.Value = null;
             e.FormattingApplied = true;
             return;
         }
 
-        var img = LayoutStorage.TryLoadImage(filename);
+        if (_grid.Rows[e.RowIndex].DataBoundItem is not ProductRow row)
+        {
+            e.Value = null;
+            e.FormattingApplied = true;
+            return;
+        }
+
+        // اقرأ من الـ cache فقط (لا network هنا — الـ CellFormatting متزامن)
+        _imageCache.TryGetValue(row.Id, out var img);
         e.Value = img;
         e.FormattingApplied = true;
     }
@@ -303,6 +315,9 @@ public class ProductsUserControl : UserControl
             _cmbSupplier.ValueMember = "Id";
             _cmbSupplier.SelectedIndex = 0;
 
+            // تحميل الصور من الخادم
+            await PreloadImagesAsync();
+
             ApplyFilter();
             SetStatus($"عدد الأصناف: {_allData.Count}", Color.SeaGreen);
         }
@@ -310,6 +325,45 @@ public class ProductsUserControl : UserControl
         {
             SetStatus("خطأ: " + ex.Message, Color.Firebrick);
         }
+    }
+
+    /// <summary>يُنزّل صور الأصناف من الخادم إلى الـ cache (بالتوازي).</summary>
+    private async Task PreloadImagesAsync()
+    {
+        // تنظيف الـ cache القديم
+        foreach (var img in _imageCache.Values)
+            img?.Dispose();
+        _imageCache.Clear();
+
+        var productsWithImage = _allData
+            .Where(p => !string.IsNullOrWhiteSpace(p.LayoutImageFilename))
+            .ToList();
+
+        if (productsWithImage.Count == 0) return;
+
+        var tasks = productsWithImage.Select(async p =>
+        {
+            var bytes = await ApiClient.Instance.DownloadProductImageAsync(p.Id);
+            Image? img = null;
+            if (bytes != null && bytes.Length > 0)
+            {
+                try
+                {
+                    using var ms = new MemoryStream(bytes);
+                    img = new Bitmap(ms); // Bitmap يحمّل بالكامل — آمن لتصريف الـ stream
+                }
+                catch
+                {
+                    img = null;
+                }
+            }
+            return (p.Id, img);
+        }).ToList();
+
+        var results = await Task.WhenAll(tasks);
+
+        foreach (var (id, img) in results)
+            _imageCache[id] = img;
     }
 
     private void ApplyFilter()
@@ -355,12 +409,32 @@ public class ProductsUserControl : UserControl
             return;
         }
 
-        using var dlg = new ProductEditDialog(null, _suppliers);
+        using var dlg = new ProductEditDialog(null, _suppliers, existingImage: null);
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
         try
         {
-            await ApiClient.Instance.PostAsync("products", dlg.Result);
+            using var resp = await ApiClient.Instance.PostAsync("products", dlg.Result);
+            var json = await resp.Content.ReadAsStringAsync();
+
+            int newId;
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                newId = doc.RootElement.GetProperty("id").GetInt32();
+            }
+            catch
+            {
+                await LoadAllAsync();
+                return;
+            }
+
+            // رفع الصورة (إن وُجدت)
+            if (!string.IsNullOrWhiteSpace(dlg.NewImageLocalPath))
+            {
+                await TryUploadImageAsync(newId, dlg.NewImageLocalPath);
+            }
+
             await LoadAllAsync();
         }
         catch (Exception ex)
@@ -383,18 +457,64 @@ public class ProductsUserControl : UserControl
             return;
         }
 
-        using var dlg = new ProductEditDialog(selected, _suppliers);
+        var existingImage = _imageCache.TryGetValue(selected.Id, out var img) ? img : null;
+
+        using var dlg = new ProductEditDialog(selected, _suppliers, existingImage);
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
         try
         {
             await ApiClient.Instance.PutAsync($"products/{selected.Id}", dlg.Result);
+
+            // التعامل مع الصورة
+            if (!string.IsNullOrWhiteSpace(dlg.NewImageLocalPath))
+            {
+                // صورة جديدة → رفعها (الخادم يحذف القديمة تلقائيًا)
+                await TryUploadImageAsync(selected.Id, dlg.NewImageLocalPath);
+            }
+            else if (dlg.ShouldDeleteImage)
+            {
+                // المستخدم ضغط "إزالة"
+                await ApiClient.Instance.DeleteProductImageAsync(selected.Id);
+            }
+
             await LoadAllAsync();
         }
         catch (Exception ex)
         {
             MessageBox.Show("فشل التعديل: " + ex.Message, "خطأ", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private static async Task TryUploadImageAsync(int productId, string localPath)
+    {
+        try
+        {
+            var bytes = await File.ReadAllBytesAsync(localPath);
+            var fileName = Path.GetFileName(localPath);
+            var contentType = GetContentTypeFromExtension(localPath);
+            await ApiClient.Instance.UploadProductImageAsync(productId, bytes, fileName, contentType);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("تم حفظ الصنف، لكن فشل رفع الصورة:\n" + ex.Message,
+                "تنبيه", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private static string GetContentTypeFromExtension(string path)
+    {
+        var ext = Path.GetExtension(path).ToLowerInvariant();
+        return ext switch
+        {
+            ".png"  => "image/png",
+            ".jpg"  => "image/jpeg",
+            ".jpeg" => "image/jpeg",
+            ".gif"  => "image/gif",
+            ".bmp"  => "image/bmp",
+            ".webp" => "image/webp",
+            _       => "application/octet-stream"
+        };
     }
 
     private async Task OnDeleteAsync()
@@ -462,55 +582,6 @@ public class ProductsUserControl : UserControl
     {
         public int Id { get; set; }
         public string Name { get; set; } = "";
-    }
-
-    // ============ Layout Image Storage (local) ============
-
-    internal static class LayoutStorage
-    {
-        public static string Folder
-        {
-            get
-            {
-                var folder = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "CostProfitApp", "Desktop", "Layouts");
-                Directory.CreateDirectory(folder);
-                return folder;
-            }
-        }
-
-        public static string CopyToStorage(string sourcePath)
-        {
-            var ext = Path.GetExtension(sourcePath).ToLowerInvariant();
-            if (string.IsNullOrEmpty(ext)) ext = ".png";
-            var filename = $"layout_{Guid.NewGuid():N}{ext}";
-            File.Copy(sourcePath, Path.Combine(Folder, filename), overwrite: true);
-            return filename;
-        }
-
-        public static string? GetFullPath(string? filename)
-        {
-            if (string.IsNullOrWhiteSpace(filename)) return null;
-            var path = Path.Combine(Folder, filename);
-            return File.Exists(path) ? path : null;
-        }
-
-        public static Image? TryLoadImage(string? filename)
-        {
-            var path = GetFullPath(filename);
-            if (path == null) return null;
-            try
-            {
-                var bytes = File.ReadAllBytes(path);
-                var ms = new MemoryStream(bytes);
-                return Image.FromStream(ms);
-            }
-            catch
-            {
-                return null;
-            }
-        }
     }
 
     // ============ Columns Dialog ============
@@ -674,16 +745,27 @@ public class ProductsUserControl : UserControl
         private Label _lblPattern = null!; private TextBox _txtPattern = null!;
 
         private Label _lblStatus = null!;
-        private string? _layoutImageFilename;
+
+        /// <summary>مسار ملف الصورة الجديدة المختارة محليًا (قبل الرفع).</summary>
+        private string? _newImageLocalPath;
+
+        /// <summary>هل طلب المستخدم إزالة الصورة الحالية (من الخادم)؟</summary>
+        private bool _shouldDeleteImage;
 
         public object Result { get; private set; } = new { };
 
-        public ProductEditDialog(ProductRow? existing, List<SupplierItem> suppliers)
+        /// <summary>مسار ملف جديد اختاره المستخدم (null إن لم يختر).</summary>
+        public string? NewImageLocalPath => _newImageLocalPath;
+
+        /// <summary>هل يجب حذف الصورة الحالية على الخادم؟</summary>
+        public bool ShouldDeleteImage => _shouldDeleteImage;
+
+        public ProductEditDialog(ProductRow? existing, List<SupplierItem> suppliers, Image? existingImage)
         {
-            BuildUi(existing, suppliers);
+            BuildUi(existing, suppliers, existingImage);
         }
 
-        private void BuildUi(ProductRow? existing, List<SupplierItem> suppliers)
+        private void BuildUi(ProductRow? existing, List<SupplierItem> suppliers, Image? existingImage)
         {
             Text = existing == null ? "إضافة صنف جديد" : $"تعديل الصنف — {existing.Name}";
             StartPosition = FormStartPosition.CenterParent;
@@ -767,7 +849,14 @@ public class ProductsUserControl : UserControl
                 Cursor = Cursors.Hand,
                 BackColor = Color.FromArgb(240, 200, 200)
             };
-            _btnClearImage.Click += (_, _) => ClearImage();
+            _btnClearImage.Click += (_, _) =>
+            {
+                _newImageLocalPath = null;
+                // إن كان المنتج موجودًا وله صورة على الخادم → علّم للحذف
+                _shouldDeleteImage = !string.IsNullOrWhiteSpace(existing?.LayoutImageFilename);
+                _picLayout.Image?.Dispose();
+                _picLayout.Image = null;
+            };
             y += 36;
 
             _picLayout = new PictureBox
@@ -904,10 +993,10 @@ public class ProductsUserControl : UserControl
                 else if (_cmbCategory.CanFocus) _cmbCategory.Focus();
             };
 
-            if (!string.IsNullOrWhiteSpace(existing?.LayoutImageFilename))
+            // عرض الصورة الحالية (من الخادم)
+            if (existingImage != null)
             {
-                _layoutImageFilename = existing!.LayoutImageFilename;
-                _picLayout.Image = LayoutStorage.TryLoadImage(_layoutImageFilename);
+                _picLayout.Image = existingImage;
             }
 
             UpdateFieldsByCategory();
@@ -949,21 +1038,20 @@ public class ProductsUserControl : UserControl
 
             try
             {
-                _layoutImageFilename = LayoutStorage.CopyToStorage(ofd.FileName);
+                _newImageLocalPath = ofd.FileName;
+                _shouldDeleteImage = false; // صورة جديدة تُلغي أي طلب حذف
                 _picLayout.Image?.Dispose();
-                _picLayout.Image = LayoutStorage.TryLoadImage(_layoutImageFilename);
+
+                using var fs = new FileStream(ofd.FileName, FileMode.Open, FileAccess.Read, FileShare.Read);
+                using var ms = new MemoryStream();
+                fs.CopyTo(ms);
+                ms.Position = 0;
+                _picLayout.Image = new Bitmap(ms);
             }
             catch (Exception ex)
             {
                 _lblStatus.Text = "فشل تحميل الصورة: " + ex.Message;
             }
-        }
-
-        private void ClearImage()
-        {
-            _layoutImageFilename = null;
-            _picLayout.Image?.Dispose();
-            _picLayout.Image = null;
         }
 
         private void OnSave(ProductRow? existing)
@@ -997,7 +1085,6 @@ public class ProductsUserControl : UserControl
                         supplierId = supplier.Id,
                         ah, l, w, h, oh,
                         layout,
-                        layoutImageFilename = _layoutImageFilename,
                         pallet
                     };
                 }
@@ -1012,7 +1099,6 @@ public class ProductsUserControl : UserControl
                         supplierId = supplier.Id,
                         ah, l, w, h, oh,
                         layout,
-                        layoutImageFilename = _layoutImageFilename,
                         pallet
                     };
                 }

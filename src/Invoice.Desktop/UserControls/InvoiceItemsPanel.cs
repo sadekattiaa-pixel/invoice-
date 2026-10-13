@@ -5,8 +5,8 @@ namespace Invoice.Desktop.UserControls;
 
 /// <summary>
 /// لوحة بنود الفاتورة — إضافة/تعديل/حذف أصناف مع كميات وأسعار.
-/// الحساب النهائي (التكلفة، الربح...) يأتي من الـ API عبر Calculate
-/// ويُطبق على الجدول بـ ApplyCalculation.
+/// الحساب النهائي (التكلفة، الربح...) يأتي من الـ API عبر Calculate.
+/// صور الأصناف تُحمَّل من الخادم إلى cache محلي للعرض.
 /// </summary>
 public class InvoiceItemsPanel : UserControl
 {
@@ -21,13 +21,15 @@ public class InvoiceItemsPanel : UserControl
     private readonly List<ItemEntry> _items = new();
     private List<ProductPickerDialog.ProductItem> _allProducts = new();
 
+    /// <summary>cache الصور — المفتاح: ProductId، القيمة: Image أو null.</summary>
+    private readonly Dictionary<int, Image?> _imageCache = new();
+
     private const string GridKey = "InvoiceItems";
 
     private bool _suppressWidthSave = false;
 
     /// <summary>
-    /// خريطة: اسم العمود الداخلي (كما في DataGridView) → مفتاح الخادم (hidden key).
-    /// تُستخدم لإرسال الأعمدة المخفية إلى الخادم عند التصدير (بند 2).
+    /// خريطة: اسم العمود الداخلي → مفتاح الخادم (hidden key).
     /// </summary>
     private static readonly Dictionary<string, string> ColumnToServerKey = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -54,15 +56,12 @@ public class InvoiceItemsPanel : UserControl
         ["TotalProfit"]        = "items.total_profit",
     };
 
-    /// <summary>يُطلق عند تغيّر القائمة.</summary>
     public event Action? Changed;
 
     public IReadOnlyList<ItemEntry> Items => _items;
 
-    /// <summary>مجموع البيع (كمية × سعر البيع).</summary>
     public decimal LocalTotalSale => _items.Sum(i => i.Quantity * i.SaleDzd);
 
-    /// <summary>مجموع الشراء بالدولار (كمية × شراء $).</summary>
     public decimal LocalTotalUsd => _items.Sum(i => i.Quantity * i.PurchaseUsd);
 
     public InvoiceItemsPanel()
@@ -73,16 +72,14 @@ public class InvoiceItemsPanel : UserControl
         HookColumnWidthTracking();
     }
 
-    /// <summary>تحميل قائمة الأصناف المتاحة (تُملأ عند الفتح).</summary>
+    /// <summary>تحميل قائمة الأصناف المتاحة (تُملأ عند الفتح) + بدء تحميل صورها.</summary>
     public void SetAvailableProducts(IEnumerable<ProductPickerDialog.ProductItem> products)
     {
         _allProducts = products.ToList();
+        _ = PreloadImagesAsync(_allProducts.Select(p => p.Id));
     }
 
-    /// <summary>
-    /// يُرجِع قائمة مفاتيح الخادم للأعمدة المخفية حاليًا (بند 2).
-    /// تُرسل هذه القائمة في ?hidden=... عند التصدير.
-    /// </summary>
+    /// <summary>يُرجِع قائمة مفاتيح الخادم للأعمدة المخفية حاليًا.</summary>
     public List<string> GetHiddenServerKeys()
     {
         var prefs = PreferencesService.Instance;
@@ -101,6 +98,71 @@ public class InvoiceItemsPanel : UserControl
     }
 
     // ============================================================
+    // Image cache
+    // ============================================================
+
+    /// <summary>يُنزّل الصور الناقصة من الخادم إلى الـ cache (بالتوازي).</summary>
+    private async Task PreloadImagesAsync(IEnumerable<int> productIds)
+    {
+        var ids = productIds
+            .Distinct()
+            .Where(id => id > 0 && !_imageCache.ContainsKey(id))
+            .ToList();
+
+        if (ids.Count == 0) return;
+
+        var tasks = ids.Select(async id =>
+        {
+            var bytes = await ApiClient.Instance.DownloadProductImageAsync(id);
+            Image? img = null;
+            if (bytes != null && bytes.Length > 0)
+            {
+                try
+                {
+                    using var ms = new MemoryStream(bytes);
+                    img = new Bitmap(ms);
+                }
+                catch
+                {
+                    img = null;
+                }
+            }
+            return (id, img);
+        }).ToList();
+
+        var results = await Task.WhenAll(tasks);
+
+        bool anyImage = false;
+        foreach (var (id, img) in results)
+        {
+            _imageCache[id] = img;
+            if (img != null) anyImage = true;
+        }
+
+        if (anyImage && !IsDisposed && IsHandleCreated)
+        {
+            try
+            {
+                if (InvokeRequired) BeginInvoke(new Action(RefreshGridImages));
+                else RefreshGridImages();
+            }
+            catch { /* قد يكون النموذج أُغلق */ }
+        }
+    }
+
+    private void RefreshGridImages()
+    {
+        try
+        {
+            _grid.InvalidateColumn(_grid.Columns["ProductImage"].Index);
+        }
+        catch
+        {
+            // نتجاهل — قد يكون العمود مخفيًا أو النموذج مُغلقًا.
+        }
+    }
+
+    // ============================================================
     // UI
     // ============================================================
 
@@ -112,7 +174,6 @@ public class InvoiceItemsPanel : UserControl
         Font = new Font("Segoe UI", 10F);
         BorderStyle = BorderStyle.FixedSingle;
 
-        // ============ العنوان + الأزرار ============
         var headerPanel = new Panel
         {
             Dock = DockStyle.Top,
@@ -153,7 +214,6 @@ public class InvoiceItemsPanel : UserControl
         headerPanel.Controls.Add(_btnColumns);
         headerPanel.Controls.Add(lblTitle);
 
-        // ============ الإجمالي ============
         var footerPanel = new Panel
         {
             Dock = DockStyle.Bottom,
@@ -171,7 +231,6 @@ public class InvoiceItemsPanel : UserControl
         };
         footerPanel.Controls.Add(_lblTotals);
 
-        // ============ شريط الحالة ============
         _lblStatus = new Label
         {
             Dock = DockStyle.Bottom,
@@ -182,7 +241,6 @@ public class InvoiceItemsPanel : UserControl
             Padding = new Padding(0, 0, 10, 0)
         };
 
-        // ============ الجدول ============
         _grid = new DataGridView
         {
             Dock = DockStyle.Fill,
@@ -224,7 +282,6 @@ public class InvoiceItemsPanel : UserControl
             }
         };
 
-        // ============ ترتيب الأعمدة (21 عمودًا) ============
         var center = DataGridViewContentAlignment.MiddleCenter;
         var money = new DataGridViewCellStyle { Format = "N2", Alignment = center };
         var moneyNullable = new DataGridViewCellStyle { Format = "N2", Alignment = center, NullValue = "—" };
@@ -241,7 +298,7 @@ public class InvoiceItemsPanel : UserControl
         _grid.Columns.Add(new DataGridViewImageColumn
         {
             Name = "ProductImage",
-            DataPropertyName = "ProductLayoutImageFilename",
+            DataPropertyName = "ProductId",   // لا يُستخدم للعرض، نحن نرسمه يدويًا
             HeaderText = "الصورة",
             Width = 70,
             ImageLayout = DataGridViewImageCellLayout.Zoom,
@@ -306,39 +363,29 @@ public class InvoiceItemsPanel : UserControl
         };
     }
 
+    /// <summary>يعرض صورة الصنف من الـ cache (يُحدَّث لاحقًا عند وصول الصور).</summary>
     private void OnCellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.ColumnIndex < 0 || e.ColumnIndex >= _grid.Columns.Count) return;
         if (_grid.Columns[e.ColumnIndex].Name != "ProductImage") return;
 
-        var filename = e.Value as string;
-        if (string.IsNullOrWhiteSpace(filename))
+        if (e.RowIndex < 0 || e.RowIndex >= _grid.Rows.Count)
         {
             e.Value = null;
             e.FormattingApplied = true;
             return;
         }
 
-        e.Value = LoadLocalImage(filename);
-        e.FormattingApplied = true;
-    }
+        if (_grid.Rows[e.RowIndex].DataBoundItem is not ItemEntry row)
+        {
+            e.Value = null;
+            e.FormattingApplied = true;
+            return;
+        }
 
-    private static Image? LoadLocalImage(string filename)
-    {
-        try
-        {
-            var folder = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "CostProfitApp", "Desktop", "Layouts");
-            var path = Path.Combine(folder, filename);
-            if (!File.Exists(path)) return null;
-            var bytes = File.ReadAllBytes(path);
-            return Image.FromStream(new MemoryStream(bytes));
-        }
-        catch
-        {
-            return null;
-        }
+        _imageCache.TryGetValue(row.ProductId, out var img);
+        e.Value = img;
+        e.FormattingApplied = true;
     }
 
     private static Button MakeSmallButton(string text, Color back)
@@ -383,7 +430,6 @@ public class InvoiceItemsPanel : UserControl
                 ProductH = prod?.H,
                 ProductOh = prod?.Oh,
                 ProductLayout = prod?.Layout,
-                ProductLayoutImageFilename = i.ProductImage ?? prod?.LayoutImageFilename,
                 ProductPallet = prod?.Pallet,
                 Quantity = i.Quantity,
                 PurchaseUsd = i.PurchaseUsd,
@@ -396,6 +442,9 @@ public class InvoiceItemsPanel : UserControl
             });
         }
         RefreshGrid();
+
+        // حمّل صور هذه البنود (الناقصة فقط) — إن لم تكن محمّلة سابقًا.
+        _ = PreloadImagesAsync(_items.Select(i => i.ProductId));
     }
 
     public void ClearAll()
@@ -404,10 +453,6 @@ public class InvoiceItemsPanel : UserControl
         RefreshGrid();
     }
 
-    /// <summary>
-    /// يُطبّق نتائج الحساب من الخادم على البنود.
-    /// يُطابق البنود بالترتيب (الخادم يحافظ على ترتيب البنود المُرسَلة).
-    /// </summary>
     public void ApplyCalculation(IEnumerable<CalculatedItem> calcItems)
     {
         var list = calcItems.ToList();
@@ -453,6 +498,9 @@ public class InvoiceItemsPanel : UserControl
         _items.Add(dlg.Result!);
         RefreshGrid();
         Changed?.Invoke();
+
+        // تأكد من وجود صورة الصنف
+        _ = PreloadImagesAsync(new[] { dlg.Result!.ProductId });
     }
 
     private void OnEdit()
@@ -475,7 +523,6 @@ public class InvoiceItemsPanel : UserControl
                           H = row.ProductH,
                           Oh = row.ProductOh,
                           Layout = row.ProductLayout,
-                          LayoutImageFilename = row.ProductLayoutImageFilename,
                           Pallet = row.ProductPallet
                       };
 
@@ -537,20 +584,16 @@ public class InvoiceItemsPanel : UserControl
         public decimal? ProductH { get; set; }
         public decimal? ProductOh { get; set; }
         public int? ProductLayout { get; set; }
-        public string? ProductLayoutImageFilename { get; set; }
         public int? ProductPallet { get; set; }
 
-        // يحرّرها المستخدم
         public decimal Quantity { get; set; }
         public decimal PurchaseUsd { get; set; }
         public decimal SaleDzd { get; set; }
         public int? Pallet { get; set; }
 
-        // محسوبة محليًا
         public decimal TotalPurchaseUsd => Quantity * PurchaseUsd;
         public decimal TotalSale => Quantity * SaleDzd;
 
-        // تأتي من الخادم (بعد Calculate أو تحميل فاتورة محفوظة)
         public decimal? PurchaseDzd { get; set; }
         public decimal? TotalDzd { get; set; }
         public decimal? UnitProfit { get; set; }
@@ -774,7 +817,6 @@ public class InvoiceItemsPanel : UserControl
                 ProductH = product.H,
                 ProductOh = product.Oh,
                 ProductLayout = product.Layout,
-                ProductLayoutImageFilename = product.LayoutImageFilename,
                 ProductPallet = product.Pallet,
                 Quantity = qty,
                 PurchaseUsd = purchase,
