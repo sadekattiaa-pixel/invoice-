@@ -75,7 +75,6 @@ public class InvoiceUserControl : UserControl
 
     /// <summary>
     /// طلب فتح فاتورة برمجيًا (يُستخدم من صفحة الأرشيف أو لوحة التحكم).
-    /// إن كانت الـ lookups جاهزة → يفتح فورًا، وإلا → يُخزَّن الطلب حتى تجهز.
     /// </summary>
     public void RequestOpenInvoice(long id)
     {
@@ -220,11 +219,6 @@ public class InvoiceUserControl : UserControl
         return tabs;
     }
 
-    /// <summary>
-    /// تبويب المدفوعات/الخصومات/المصاريف (بند 3):
-    ///   يمين الشاشة: المصاريف (كامل الارتفاع).
-    ///   يسار الشاشة: المدفوعات (أعلى) + الخصومات (أسفل).
-    /// </summary>
     private Control BuildAmountsTab()
     {
         var layout = new TableLayoutPanel
@@ -556,7 +550,6 @@ public class InvoiceUserControl : UserControl
 
             _lookupsLoaded = true;
 
-            // هل هناك طلب فتح فاتورة مُعلَّق؟
             if (_pendingOpenInvoiceId.HasValue)
             {
                 var id = _pendingOpenInvoiceId.Value;
@@ -623,7 +616,6 @@ public class InvoiceUserControl : UserControl
         await LoadInvoiceByIdAsync(dlg.SelectedId.Value);
     }
 
-    /// <summary>يُستخدم أيضًا من صفحة الأرشيف.</summary>
     public async Task LoadInvoiceByIdAsync(long id)
     {
         try
@@ -899,13 +891,33 @@ public class InvoiceUserControl : UserControl
 
         try
         {
+            SetStatus("جارٍ توليد الملف...", Color.DimGray);
+
             var endpoint = $"exports/invoice/{_currentInvoiceId.Value}/{format}";
             var bytes = await ApiClient.Instance.DownloadAsync(endpoint, mergedHidden);
 
+            // ============ PDF: معاينة أولًا (بند 16) ============
+            if (format.Equals("pdf", StringComparison.OrdinalIgnoreCase))
+            {
+                var suggestedName = $"{_txtInvoiceNo.Text}.pdf";
+                var saved = PdfPreviewForm.ShowPreview(this, bytes, suggestedName);
+
+                if (saved)
+                {
+                    SetStatus("تم حفظ ملف PDF.", Color.SeaGreen);
+                }
+                else
+                {
+                    SetStatus("تم إلغاء الحفظ (لم تُحفظ النسخة).", Color.DimGray);
+                }
+                return;
+            }
+
+            // ============ Excel: حفظ مباشر ============
             using var sfd = new SaveFileDialog
             {
-                Filter = format == "pdf" ? "PDF Files (*.pdf)|*.pdf" : "Excel Files (*.xlsx)|*.xlsx",
-                FileName = $"{_txtInvoiceNo.Text}.{format}"
+                Filter = "Excel Files (*.xlsx)|*.xlsx",
+                FileName = $"{_txtInvoiceNo.Text}.xlsx"
             };
             if (sfd.ShowDialog(this) != DialogResult.OK) return;
 

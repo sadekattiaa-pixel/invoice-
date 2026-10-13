@@ -9,6 +9,7 @@ namespace Invoice.Desktop.UserControls;
 /// - فلترة: الحالة، المورد، نطاق تاريخ، بحث.
 /// - إخفاء الأعمدة (ColumnsDialog).
 /// - تصدير PDF/Excel مع نافذة خيارات الأقسام (ExportOptionsDialog).
+/// - PDF: معاينة أولًا عبر PdfPreviewForm ثم الحفظ (بند 16).
 /// - النقر المزدوج على فاتورة يطلب فتحها (يُطلِق حدث InvoiceOpenRequested).
 /// </summary>
 public class ArchiveUserControl : UserControl
@@ -427,13 +428,33 @@ public class ArchiveUserControl : UserControl
 
         try
         {
+            SetStatus("جارٍ توليد الملف...", Color.DimGray);
+
             var endpoint = $"exports/invoice/{row.Id}/{format}";
             var bytes = await ApiClient.Instance.DownloadAsync(endpoint, exportHidden);
 
+            // ============ PDF: معاينة أولًا (بند 16) ============
+            if (format.Equals("pdf", StringComparison.OrdinalIgnoreCase))
+            {
+                var suggestedName = $"{row.InvoiceNo}.pdf";
+                var saved = PdfPreviewForm.ShowPreview(this, bytes, suggestedName);
+
+                if (saved)
+                {
+                    SetStatus("تم حفظ ملف PDF.", Color.SeaGreen);
+                }
+                else
+                {
+                    SetStatus("تم إلغاء الحفظ (لم تُحفظ النسخة).", Color.DimGray);
+                }
+                return;
+            }
+
+            // ============ Excel: حفظ مباشر ============
             using var sfd = new SaveFileDialog
             {
-                Filter = format == "pdf" ? "PDF Files (*.pdf)|*.pdf" : "Excel Files (*.xlsx)|*.xlsx",
-                FileName = $"{row.InvoiceNo}.{format}"
+                Filter = "Excel Files (*.xlsx)|*.xlsx",
+                FileName = $"{row.InvoiceNo}.xlsx"
             };
             if (sfd.ShowDialog(this) != DialogResult.OK) return;
 
