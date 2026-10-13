@@ -256,6 +256,7 @@ public class MainForm : Form
             "Dashboard" => new DashboardUserControl(),
             "Suppliers" => new SuppliersUserControl(),
             "Products" => new ProductsUserControl(),
+            "Invoice" => new InvoiceUserControl(),
             _ => BuildPlaceholder($"صفحة «{_lblPageTitle.Text}» قيد الإنشاء.\nستُضاف في الخطوات القادمة.")
         };
 
