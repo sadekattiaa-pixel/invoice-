@@ -7,10 +7,6 @@ namespace Invoice.Desktop.UserControls;
 
 /// <summary>
 /// شاشة الفاتورة — إنشاء/تحرير/حفظ/أرشفة فاتورة + حساب معاينة + تصدير PDF/Excel.
-/// الشاشة مُقسَّمة إلى 3 تبويبات:
-///   1) بيانات المورد والملاحظات
-///   2) الأصناف
-///   3) المدفوعات والخصومات والمصاريف
 /// </summary>
 public class InvoiceUserControl : UserControl
 {
@@ -710,8 +706,6 @@ public class InvoiceUserControl : UserControl
 
             _lastCalculation = calc;
             ApplyCalculation(calc);
-
-            // ============ تحديث الأعمدة المحسوبة في جدول البنود (بند 1) ============
             _itemsPanel.ApplyCalculation(calc.Items);
 
             SetStatus("تم الحساب.", Color.SeaGreen);
@@ -887,10 +881,15 @@ public class InvoiceUserControl : UserControl
             return;
         }
 
-        var hidden = ColumnsDialog.GetHiddenKeys(GridKey);
+        // ============ بند 2: الأعمدة المخفية من جدول البنود ============
+        // نحصل على مفاتيح الخادم مباشرة من لوحة البنود (تحويل من اسم العمود الداخلي).
+        var hidden = _itemsPanel.GetHiddenServerKeys();
+
+        // نافذة خيارات التصدير — تُعيد مفاتيح الأجزاء/الأعمدة المُلغاة (أو null عند الإلغاء).
         var exportHidden = ExportOptionsDialog.ShowFor(this, hidden);
         if (exportHidden == null) return;
 
+        // دمج القائمتين مع إزالة التكرار.
         var mergedHidden = hidden
             .Concat(exportHidden)
             .Distinct(StringComparer.OrdinalIgnoreCase)

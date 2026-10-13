@@ -25,6 +25,35 @@ public class InvoiceItemsPanel : UserControl
 
     private bool _suppressWidthSave = false;
 
+    /// <summary>
+    /// خريطة: اسم العمود الداخلي (كما في DataGridView) → مفتاح الخادم (hidden key).
+    /// تُستخدم لإرسال الأعمدة المخفية إلى الخادم عند التصدير (بند 2).
+    /// </summary>
+    private static readonly Dictionary<string, string> ColumnToServerKey = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["LineNo"]             = "items.line_no",
+        ["ProductCode"]        = "items.code",
+        ["ProductAh"]          = "items.ah",
+        ["ProductL"]           = "items.l",
+        ["ProductW"]           = "items.w",
+        ["ProductH"]           = "items.h",
+        ["ProductOh"]          = "items.oh",
+        ["ProductLayout"]      = "items.layout",
+        ["ProductImage"]       = "items.image",
+        ["ProductPallet"]      = "items.pallet",
+        ["ProductCategory"]    = "items.category",
+        ["ProductPattern"]     = "items.pattern",
+        ["Quantity"]           = "items.quantity",
+        ["PurchaseUsd"]        = "items.purchase_usd",
+        ["TotalPurchaseUsd"]   = "items.total_purchase_usd",
+        ["PurchaseDzd"]        = "items.purchase_dzd",
+        ["TotalDzd"]           = "items.total_dzd",
+        ["SaleDzd"]            = "items.sale_dzd",
+        ["TotalSale"]          = "items.total_sale",
+        ["UnitProfit"]         = "items.unit_profit",
+        ["TotalProfit"]        = "items.total_profit",
+    };
+
     /// <summary>يُطلق عند تغيّر القائمة.</summary>
     public event Action? Changed;
 
@@ -48,6 +77,27 @@ public class InvoiceItemsPanel : UserControl
     public void SetAvailableProducts(IEnumerable<ProductPickerDialog.ProductItem> products)
     {
         _allProducts = products.ToList();
+    }
+
+    /// <summary>
+    /// يُرجِع قائمة مفاتيح الخادم للأعمدة المخفية حاليًا (بند 2).
+    /// تُرسل هذه القائمة في ?hidden=... عند التصدير.
+    /// </summary>
+    public List<string> GetHiddenServerKeys()
+    {
+        var prefs = PreferencesService.Instance;
+        var result = new List<string>();
+
+        foreach (DataGridViewColumn col in _grid.Columns)
+        {
+            if (prefs.IsColumnHidden(GridKey, col.Name))
+            {
+                if (ColumnToServerKey.TryGetValue(col.Name, out var serverKey))
+                    result.Add(serverKey);
+            }
+        }
+
+        return result;
     }
 
     // ============================================================
@@ -151,7 +201,7 @@ public class InvoiceItemsPanel : UserControl
             Font = new Font("Segoe UI", 10F),
             ColumnHeadersHeight = 30,
             EnableHeadersVisualStyles = false,
-            ScrollBars = ScrollBars.Both   // بند 4: تمرير أفقي ورأسي
+            ScrollBars = ScrollBars.Both
         };
         _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(30, 60, 120);
         _grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
@@ -174,7 +224,7 @@ public class InvoiceItemsPanel : UserControl
             }
         };
 
-        // ============ ترتيب الأعمدة (بند 1) ============
+        // ============ ترتيب الأعمدة (21 عمودًا) ============
         var center = DataGridViewContentAlignment.MiddleCenter;
         var money = new DataGridViewCellStyle { Format = "N2", Alignment = center };
         var moneyNullable = new DataGridViewCellStyle { Format = "N2", Alignment = center, NullValue = "—" };
@@ -222,7 +272,7 @@ public class InvoiceItemsPanel : UserControl
         RefreshGrid();
     }
 
-    // ============ Column Widths (بند 12) ============
+    // ============ Column Widths ============
 
     private void ApplyColumnWidths()
     {
@@ -355,7 +405,7 @@ public class InvoiceItemsPanel : UserControl
     }
 
     /// <summary>
-    /// يُطبّق نتائج الحساب من الخادم على البنود (بند 1: تحديث الأعمدة 16, 17, 20, 21).
+    /// يُطبّق نتائج الحساب من الخادم على البنود.
     /// يُطابق البنود بالترتيب (الخادم يحافظ على ترتيب البنود المُرسَلة).
     /// </summary>
     public void ApplyCalculation(IEnumerable<CalculatedItem> calcItems)
