@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Invoice.Desktop.Models;
 using Invoice.Desktop.Services;
+using Invoice.Desktop.Shared;
 
 namespace Invoice.Desktop.UserControls;
 
@@ -166,7 +167,7 @@ public class InvoiceUserControl : UserControl
             MessageBox.Show("لم يتم العثور على جدول البنود.", "تنبيه", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
-        Shared.ColumnsDialog.ShowFor(grid, GridKey, this);
+        ColumnsDialog.ShowFor(grid, GridKey, this);
     }
 
     private static DataGridView? FindGrid(Control c)
@@ -780,12 +781,23 @@ public class InvoiceUserControl : UserControl
             return;
         }
 
+        // 1) مفاتيح الأعمدة المخفية من جدول البنود (من نافذة "الأعمدة").
+        var hidden = ColumnsDialog.GetHiddenKeys(GridKey);
+
+        // 2) نافذة خيارات التصدير — تُعيد مفاتيح الأقسام المُلغاة (أو null عند الإلغاء).
+        var exportHidden = ExportOptionsDialog.ShowFor(this, hidden);
+        if (exportHidden == null) return; // المستخدم ألغى
+
+        // 3) دمج القائمتين مع إزالة التكرار.
+        var mergedHidden = hidden
+            .Concat(exportHidden)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         try
         {
-            var hidden = Shared.ColumnsDialog.GetHiddenKeys("InvoiceItems");
-
             var endpoint = $"exports/invoice/{_currentInvoiceId.Value}/{format}";
-            var bytes = await ApiClient.Instance.DownloadAsync(endpoint, hidden);
+            var bytes = await ApiClient.Instance.DownloadAsync(endpoint, mergedHidden);
 
             using var sfd = new SaveFileDialog
             {
