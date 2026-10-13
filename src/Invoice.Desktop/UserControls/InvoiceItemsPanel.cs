@@ -5,8 +5,8 @@ namespace Invoice.Desktop.UserControls;
 
 /// <summary>
 /// لوحة بنود الفاتورة — إضافة/تعديل/حذف أصناف مع كميات وأسعار.
-/// الحساب النهائي (الربح، سعر الصرف...) يأتي من الـ API عبر Calculate.
-/// هذا الـ Panel يحسب فقط معاينة محلية لإجمالي البيع.
+/// الحساب النهائي (التكلفة، الربح...) يأتي من الـ API عبر Calculate
+/// ويُطبق على الجدول بـ ApplyCalculation.
 /// </summary>
 public class InvoiceItemsPanel : UserControl
 {
@@ -150,7 +150,8 @@ public class InvoiceItemsPanel : UserControl
             RightToLeft = RightToLeft.Yes,
             Font = new Font("Segoe UI", 10F),
             ColumnHeadersHeight = 30,
-            EnableHeadersVisualStyles = false
+            EnableHeadersVisualStyles = false,
+            ScrollBars = ScrollBars.Both   // بند 4: تمرير أفقي ورأسي
         };
         _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(30, 60, 120);
         _grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
@@ -173,9 +174,20 @@ public class InvoiceItemsPanel : UserControl
             }
         };
 
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "LineNo", DataPropertyName = "LineNo", HeaderText = "#", Width = 40 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "ProductCode", DataPropertyName = "ProductCode", HeaderText = "الكود", Width = 120 });
+        // ============ ترتيب الأعمدة (بند 1) ============
+        var center = DataGridViewContentAlignment.MiddleCenter;
+        var money = new DataGridViewCellStyle { Format = "N2", Alignment = center };
+        var moneyNullable = new DataGridViewCellStyle { Format = "N2", Alignment = center, NullValue = "—" };
+        var intCenter = new DataGridViewCellStyle { Format = "N0", Alignment = center };
 
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "LineNo", DataPropertyName = "LineNo", HeaderText = "#", Width = 40 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "ProductCode", DataPropertyName = "ProductCode", HeaderText = "الكود", Width = 130 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "ProductAh", DataPropertyName = "ProductAh", HeaderText = "AH", Width = 55, DefaultCellStyle = intCenter });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "ProductL", DataPropertyName = "ProductL", HeaderText = "L", Width = 50, DefaultCellStyle = intCenter });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "ProductW", DataPropertyName = "ProductW", HeaderText = "W", Width = 50, DefaultCellStyle = intCenter });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "ProductH", DataPropertyName = "ProductH", HeaderText = "H", Width = 50, DefaultCellStyle = intCenter });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "ProductOh", DataPropertyName = "ProductOh", HeaderText = "OH", Width = 55, DefaultCellStyle = intCenter });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "ProductLayout", DataPropertyName = "ProductLayout", HeaderText = "LAYOUT", Width = 70, DefaultCellStyle = intCenter });
         _grid.Columns.Add(new DataGridViewImageColumn
         {
             Name = "ProductImage",
@@ -186,74 +198,21 @@ public class InvoiceItemsPanel : UserControl
             DefaultCellStyle = new DataGridViewCellStyle
             {
                 NullValue = null,
-                Alignment = DataGridViewContentAlignment.MiddleCenter
+                Alignment = center
             }
         });
-
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "ProductName", DataPropertyName = "ProductName", HeaderText = "الصنف", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "ProductCategory", DataPropertyName = "ProductCategory", HeaderText = "التصنيف", Width = 90 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "ProductPallet", DataPropertyName = "ProductPallet", HeaderText = "PALLET", Width = 65, DefaultCellStyle = intCenter });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "ProductCategory", DataPropertyName = "ProductCategory", HeaderText = "التصنيف", Width = 100 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "ProductPattern", DataPropertyName = "ProductPattern", HeaderText = "النقشة", Width = 110 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "ProductAh", DataPropertyName = "ProductAh", HeaderText = "Ah", Width = 55,
-            DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
-        });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "ProductL", DataPropertyName = "ProductL", HeaderText = "L", Width = 50,
-            DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
-        });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "ProductW", DataPropertyName = "ProductW", HeaderText = "W", Width = 50,
-            DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
-        });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "ProductH", DataPropertyName = "ProductH", HeaderText = "H", Width = 50,
-            DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
-        });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "ProductOh", DataPropertyName = "ProductOh", HeaderText = "Oh", Width = 50,
-            DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
-        });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "ProductLayout", DataPropertyName = "ProductLayout", HeaderText = "Layout", Width = 65,
-            DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
-        });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "ProductPallet", DataPropertyName = "ProductPallet", HeaderText = "Pallet", Width = 65,
-            DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
-        });
-
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "Quantity", DataPropertyName = "Quantity", HeaderText = "الكمية", Width = 80,
-            DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
-        });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "PurchaseUsd", DataPropertyName = "PurchaseUsd", HeaderText = "الشراء $", Width = 90,
-            DefaultCellStyle = new DataGridViewCellStyle { Format = "N2", Alignment = DataGridViewContentAlignment.MiddleCenter }
-        });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "SaleDzd", DataPropertyName = "SaleDzd", HeaderText = "البيع د.ل", Width = 100,
-            DefaultCellStyle = new DataGridViewCellStyle { Format = "N2", Alignment = DataGridViewContentAlignment.MiddleCenter }
-        });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "TotalSale", DataPropertyName = "TotalSale", HeaderText = "إجمالي البيع", Width = 120,
-            DefaultCellStyle = new DataGridViewCellStyle { Format = "N2", Alignment = DataGridViewContentAlignment.MiddleCenter }
-        });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn
-        {
-            Name = "Pallet", DataPropertyName = "Pallet", HeaderText = "Pallet (سطر)", Width = 90,
-            DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
-        });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Quantity", DataPropertyName = "Quantity", HeaderText = "الكمية", Width = 80, DefaultCellStyle = intCenter });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "PurchaseUsd", DataPropertyName = "PurchaseUsd", HeaderText = "الشراء $", Width = 95, DefaultCellStyle = money });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "TotalPurchaseUsd", DataPropertyName = "TotalPurchaseUsd", HeaderText = "اجمالي الشراء $", Width = 130, DefaultCellStyle = money });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "PurchaseDzd", DataPropertyName = "PurchaseDzd", HeaderText = "التكلفة", Width = 110, DefaultCellStyle = moneyNullable });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "TotalDzd", DataPropertyName = "TotalDzd", HeaderText = "اجمالي التكلفة", Width = 130, DefaultCellStyle = moneyNullable });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "SaleDzd", DataPropertyName = "SaleDzd", HeaderText = "البيع", Width = 110, DefaultCellStyle = money });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "TotalSale", DataPropertyName = "TotalSale", HeaderText = "اجمالي البيع", Width = 130, DefaultCellStyle = money });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "UnitProfit", DataPropertyName = "UnitProfit", HeaderText = "الربح", Width = 110, DefaultCellStyle = moneyNullable });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "TotalProfit", DataPropertyName = "TotalProfit", HeaderText = "اجمالي الربح", Width = 130, DefaultCellStyle = moneyNullable });
 
         Controls.Add(_grid);
         Controls.Add(_lblStatus);
@@ -379,7 +338,11 @@ public class InvoiceItemsPanel : UserControl
                 Quantity = i.Quantity,
                 PurchaseUsd = i.PurchaseUsd,
                 SaleDzd = i.SaleDzd,
-                Pallet = i.Pallet
+                Pallet = i.Pallet,
+                PurchaseDzd = i.PurchaseDzd,
+                TotalDzd = i.TotalDzd,
+                UnitProfit = i.UnitProfit,
+                TotalProfit = i.TotalProfit
             });
         }
         RefreshGrid();
@@ -388,6 +351,24 @@ public class InvoiceItemsPanel : UserControl
     public void ClearAll()
     {
         _items.Clear();
+        RefreshGrid();
+    }
+
+    /// <summary>
+    /// يُطبّق نتائج الحساب من الخادم على البنود (بند 1: تحديث الأعمدة 16, 17, 20, 21).
+    /// يُطابق البنود بالترتيب (الخادم يحافظ على ترتيب البنود المُرسَلة).
+    /// </summary>
+    public void ApplyCalculation(IEnumerable<CalculatedItem> calcItems)
+    {
+        var list = calcItems.ToList();
+        for (int i = 0; i < _items.Count && i < list.Count; i++)
+        {
+            var c = list[i];
+            _items[i].PurchaseDzd = c.PurchaseDzd;
+            _items[i].TotalDzd = c.TotalDzd;
+            _items[i].UnitProfit = c.UnitProfit;
+            _items[i].TotalProfit = c.TotalProfit;
+        }
         RefreshGrid();
     }
 
@@ -463,7 +444,7 @@ public class InvoiceItemsPanel : UserControl
         if (idx < 0) return;
 
         var confirm = MessageBox.Show(
-            $"هل تريد حذف البند «{row.ProductName}»؟",
+            $"هل تريد حذف البند «{row.ProductCode}»؟",
             "تأكيد الحذف",
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Warning);
@@ -482,7 +463,7 @@ public class InvoiceItemsPanel : UserControl
         _grid.DataSource = null;
         _grid.DataSource = _items.ToList();
 
-        _lblTotals.Text = $"إجمالي البيع: {LocalTotalSale:N2} د.ل    |    " +
+        _lblTotals.Text = $"إجمالي البيع: {LocalTotalSale:N2}    |    " +
                           $"إجمالي الشراء: $ {LocalTotalUsd:N2}    |    " +
                           $"عدد البنود: {_items.Count}";
         _lblStatus.Text = "اضغط Enter لفتح نافذة اختيار صنف — أو استخدم زر «إضافة صنف».";
@@ -509,12 +490,21 @@ public class InvoiceItemsPanel : UserControl
         public string? ProductLayoutImageFilename { get; set; }
         public int? ProductPallet { get; set; }
 
+        // يحرّرها المستخدم
         public decimal Quantity { get; set; }
         public decimal PurchaseUsd { get; set; }
         public decimal SaleDzd { get; set; }
         public int? Pallet { get; set; }
 
+        // محسوبة محليًا
+        public decimal TotalPurchaseUsd => Quantity * PurchaseUsd;
         public decimal TotalSale => Quantity * SaleDzd;
+
+        // تأتي من الخادم (بعد Calculate أو تحميل فاتورة محفوظة)
+        public decimal? PurchaseDzd { get; set; }
+        public decimal? TotalDzd { get; set; }
+        public decimal? UnitProfit { get; set; }
+        public decimal? TotalProfit { get; set; }
     }
 
     // ============================================================
@@ -523,10 +513,10 @@ public class InvoiceItemsPanel : UserControl
 
     private class ItemEditDialog : Form
     {
-        private NumericUpDown _numQty = null!;
-        private NumericUpDown _numPurchase = null!;
-        private NumericUpDown _numSale = null!;
-        private NumericUpDown _numPallet = null!;
+        private TextBox _txtQty = null!;
+        private TextBox _txtPurchase = null!;
+        private TextBox _txtSale = null!;
+        private TextBox _txtPallet = null!;
         private CheckBox _chkPallet = null!;
         private Label _lblStatus = null!;
         private Button _btnSave = null!;
@@ -540,7 +530,9 @@ public class InvoiceItemsPanel : UserControl
 
         private void BuildUi(ProductPickerDialog.ProductItem product, ItemEntry? existing)
         {
-            Text = existing == null ? "إضافة بند" : "تعديل بند";
+            bool isNew = existing == null;
+
+            Text = isNew ? "إضافة بند" : "تعديل بند";
             StartPosition = FormStartPosition.CenterParent;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
@@ -569,15 +561,15 @@ public class InvoiceItemsPanel : UserControl
             y += 40;
 
             var lblQty = new Label { Text = "الكمية:", Location = new Point(labelX, y + 5), AutoSize = true };
-            _numQty = MakeNumeric(fieldX, y, fieldW, decimalPlaces: 0, max: 1_000_000m, value: existing?.Quantity ?? 1m);
+            _txtQty = MakeNumericTextBox(fieldX, y, fieldW, isNew ? null : existing!.Quantity);
             y += 42;
 
             var lblP = new Label { Text = "الشراء $:", Location = new Point(labelX, y + 5), AutoSize = true };
-            _numPurchase = MakeNumeric(fieldX, y, fieldW, decimalPlaces: 2, max: 1_000_000m, value: existing?.PurchaseUsd ?? 0m);
+            _txtPurchase = MakeNumericTextBox(fieldX, y, fieldW, isNew ? null : existing!.PurchaseUsd);
             y += 42;
 
-            var lblS = new Label { Text = "البيع د.ل:", Location = new Point(labelX, y + 5), AutoSize = true };
-            _numSale = MakeNumeric(fieldX, y, fieldW, decimalPlaces: 2, max: 1_000_000_000m, value: existing?.SaleDzd ?? 0m);
+            var lblS = new Label { Text = "البيع:", Location = new Point(labelX, y + 5), AutoSize = true };
+            _txtSale = MakeNumericTextBox(fieldX, y, fieldW, isNew ? null : existing!.SaleDzd);
             y += 42;
 
             _chkPallet = new CheckBox
@@ -589,11 +581,11 @@ public class InvoiceItemsPanel : UserControl
             };
             _chkPallet.CheckedChanged += (_, _) =>
             {
-                _numPallet.Enabled = _chkPallet.Checked;
+                _txtPallet.Enabled = _chkPallet.Checked;
             };
 
-            _numPallet = MakeNumeric(fieldX, y - 5, 150, decimalPlaces: 0, max: 10_000m, value: existing?.Pallet ?? 0m);
-            _numPallet.Enabled = _chkPallet.Checked;
+            _txtPallet = MakeNumericTextBox(fieldX, y - 3, 150, existing?.Pallet);
+            _txtPallet.Enabled = _chkPallet.Checked;
             y += 42;
 
             _lblStatus = new Label
@@ -636,30 +628,43 @@ public class InvoiceItemsPanel : UserControl
             Controls.AddRange(new Control[]
             {
                 lblProductLbl, lblProduct,
-                lblQty, _numQty,
-                lblP, _numPurchase,
-                lblS, _numSale,
-                _chkPallet, _numPallet,
+                lblQty, _txtQty,
+                lblP, _txtPurchase,
+                lblS, _txtSale,
+                _chkPallet, _txtPallet,
                 _lblStatus,
                 _btnSave, btnCancel
             });
 
-            _numQty.TabIndex = 0;
-            _numPurchase.TabIndex = 1;
-            _numSale.TabIndex = 2;
+            _txtQty.TabIndex = 0;
+            _txtPurchase.TabIndex = 1;
+            _txtSale.TabIndex = 2;
             _chkPallet.TabStop = false;
-            _numPallet.TabIndex = 3;
+            _txtPallet.TabIndex = 3;
             _btnSave.TabIndex = 4;
             btnCancel.TabIndex = 5;
 
-            _numQty.KeyDown += (_, e) => HandleEnterNavigation(e, _numPurchase);
-            _numPurchase.KeyDown += (_, e) => HandleEnterNavigation(e, _numSale);
-            _numSale.KeyDown += (_, e) => HandleEnterNavigation(e, _btnSave);
+            _txtQty.KeyDown += (_, e) => HandleEnterNavigation(e, _txtPurchase);
+            _txtPurchase.KeyDown += (_, e) => HandleEnterNavigation(e, _txtSale);
+            _txtSale.KeyDown += (_, e) => HandleEnterNavigation(e, _btnSave);
 
             Shown += (_, _) =>
             {
-                _numQty.Focus();
-                _numQty.Select(0, _numQty.Text.Length);
+                _txtQty.Focus();
+                _txtQty.SelectAll();
+            };
+        }
+
+        private static TextBox MakeNumericTextBox(int x, int y, int w, decimal? value)
+        {
+            return new TextBox
+            {
+                Location = new Point(x, y),
+                Width = w,
+                TextAlign = HorizontalAlignment.Center,
+                Text = value.HasValue && value.Value > 0m
+                    ? value.Value.ToString("0.##")
+                    : ""
             };
         }
 
@@ -673,25 +678,38 @@ public class InvoiceItemsPanel : UserControl
             }
         }
 
-        private static NumericUpDown MakeNumeric(int x, int y, int w, int decimalPlaces, decimal max, decimal value)
-        {
-            return new NumericUpDown
-            {
-                Location = new Point(x, y),
-                Width = w,
-                DecimalPlaces = decimalPlaces,
-                Maximum = max,
-                Minimum = 0m,
-                ThousandsSeparator = true,
-                Value = Math.Max(0m, Math.Min(max, value))
-            };
-        }
-
         private void Confirm(ProductPickerDialog.ProductItem product, ItemEntry? existing)
         {
-            if (_numQty.Value <= 0m) { _lblStatus.Text = "الكمية يجب أن تكون أكبر من صفر."; _numQty.Focus(); return; }
-            if (_numPurchase.Value <= 0m) { _lblStatus.Text = "سعر الشراء يجب أن يكون أكبر من صفر."; _numPurchase.Focus(); return; }
-            if (_numSale.Value <= 0m) { _lblStatus.Text = "سعر البيع يجب أن يكون أكبر من صفر."; _numSale.Focus(); return; }
+            if (!TryParsePositiveDecimal(_txtQty.Text, out var qty))
+            {
+                _lblStatus.Text = "الكمية مطلوبة ويجب أن تكون أكبر من صفر.";
+                _txtQty.Focus();
+                return;
+            }
+            if (!TryParsePositiveDecimal(_txtPurchase.Text, out var purchase))
+            {
+                _lblStatus.Text = "سعر الشراء مطلوب ويجب أن يكون أكبر من صفر.";
+                _txtPurchase.Focus();
+                return;
+            }
+            if (!TryParsePositiveDecimal(_txtSale.Text, out var sale))
+            {
+                _lblStatus.Text = "سعر البيع مطلوب ويجب أن يكون أكبر من صفر.";
+                _txtSale.Focus();
+                return;
+            }
+
+            int? pallet = null;
+            if (_chkPallet.Checked)
+            {
+                if (!int.TryParse(_txtPallet.Text.Trim(), out var p) || p <= 0)
+                {
+                    _lblStatus.Text = "قيمة Pallet غير صالحة.";
+                    _txtPallet.Focus();
+                    return;
+                }
+                pallet = p;
+            }
 
             Result = new ItemEntry
             {
@@ -708,14 +726,24 @@ public class InvoiceItemsPanel : UserControl
                 ProductLayout = product.Layout,
                 ProductLayoutImageFilename = product.LayoutImageFilename,
                 ProductPallet = product.Pallet,
-                Quantity = _numQty.Value,
-                PurchaseUsd = _numPurchase.Value,
-                SaleDzd = _numSale.Value,
-                Pallet = _chkPallet.Checked ? (int?)_numPallet.Value : null
+                Quantity = qty,
+                PurchaseUsd = purchase,
+                SaleDzd = sale,
+                Pallet = pallet
             };
 
             DialogResult = DialogResult.OK;
             Close();
+        }
+
+        private static bool TryParsePositiveDecimal(string text, out decimal value)
+        {
+            value = 0m;
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            if (!decimal.TryParse(text.Trim(), out var v)) return false;
+            if (v <= 0m) return false;
+            value = v;
+            return true;
         }
     }
 }

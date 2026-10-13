@@ -202,7 +202,10 @@ public class InvoiceUserControl : UserControl
             Padding = new Padding(6)
         };
         _itemsPanel = new InvoiceItemsPanel { Dock = DockStyle.Fill };
-        _itemsPanel.Changed += () => _lastCalculation = null;
+        _itemsPanel.Changed += () =>
+        {
+            _lastCalculation = null;
+        };
         tabItems.Controls.Add(_itemsPanel);
 
         var tabAmounts = new TabPage("المدفوعات والخصومات والمصاريف")
@@ -707,6 +710,10 @@ public class InvoiceUserControl : UserControl
 
             _lastCalculation = calc;
             ApplyCalculation(calc);
+
+            // ============ تحديث الأعمدة المحسوبة في جدول البنود (بند 1) ============
+            _itemsPanel.ApplyCalculation(calc.Items);
+
             SetStatus("تم الحساب.", Color.SeaGreen);
         }
         catch (Exception ex)
@@ -896,7 +903,6 @@ public class InvoiceUserControl : UserControl
             var endpoint = $"exports/invoice/{_currentInvoiceId.Value}/{format}";
             var bytes = await ApiClient.Instance.DownloadAsync(endpoint, mergedHidden);
 
-            // ============ PDF: معاينة أولًا (بند 16) ============
             if (format.Equals("pdf", StringComparison.OrdinalIgnoreCase))
             {
                 var suggestedName = $"{_txtInvoiceNo.Text}.pdf";
@@ -913,7 +919,6 @@ public class InvoiceUserControl : UserControl
                 return;
             }
 
-            // ============ Excel: حفظ مباشر ============
             using var sfd = new SaveFileDialog
             {
                 Filter = "Excel Files (*.xlsx)|*.xlsx",

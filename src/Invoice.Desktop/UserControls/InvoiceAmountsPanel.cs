@@ -75,7 +75,6 @@ public class InvoiceAmountsPanel : UserControl
         _btnDelete = MakeSmallButton("حذف", Color.FromArgb(200, 50, 50), DockStyle.Left);
         _btnDelete.Click += (_, _) => OnDelete();
 
-        // ترتيب من اليسار: حذف، تعديل، إضافة (لأن Dock=Left يُضاف بترتيب معكوس)
         headerPanel.Controls.Add(_btnAdd);
         headerPanel.Controls.Add(_btnEdit);
         headerPanel.Controls.Add(_btnDelete);
@@ -116,7 +115,8 @@ public class InvoiceAmountsPanel : UserControl
             RightToLeft = RightToLeft.Yes,
             Font = new Font("Segoe UI", 10F),
             ColumnHeadersHeight = 30,
-            EnableHeadersVisualStyles = false
+            EnableHeadersVisualStyles = false,
+            ScrollBars = ScrollBars.Both   // بند 4: تمرير أفقي ورأسي
         };
         _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(30, 60, 120);
         _grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
@@ -245,6 +245,6 @@ public class InvoiceAmountsPanel : UserControl
     {
         _grid.DataSource = null;
         _grid.DataSource = _items.ToList();
-        _lblTotal.Text = $"الإجمالي: {Total:N2} د.ل";
+        _lblTotal.Text = $"الإجمالي: {Total:N2}";
     }
 }

@@ -186,7 +186,8 @@ public class DashboardUserControl : UserControl
             RightToLeft = RightToLeft.Yes,
             Font = new Font("Segoe UI", 9.5F),
             ColumnHeadersHeight = 32,
-            EnableHeadersVisualStyles = false
+            EnableHeadersVisualStyles = false,
+            ScrollBars = ScrollBars.Both   // بند 4: تمرير أفقي ورأسي
         };
         _draftGrid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(30, 60, 120);
         _draftGrid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;

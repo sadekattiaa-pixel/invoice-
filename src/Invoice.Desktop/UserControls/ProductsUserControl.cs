@@ -116,7 +116,8 @@ public class ProductsUserControl : UserControl
             RightToLeft = RightToLeft.Yes,
             Font = new Font("Segoe UI", 10F),
             ColumnHeadersHeight = 36,
-            EnableHeadersVisualStyles = false
+            EnableHeadersVisualStyles = false,
+            ScrollBars = ScrollBars.Both   // بند 4: تمرير أفقي ورأسي
         };
         _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(30, 60, 120);
         _grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
@@ -245,7 +246,6 @@ public class ProductsUserControl : UserControl
         }
     }
 
-    /// <summary>يستعيد عروض الأعمدة المحفوظة (بند 12).</summary>
     private void ApplyColumnWidths()
     {
         var prefs = PreferencesService.Instance;
@@ -254,7 +254,6 @@ public class ProductsUserControl : UserControl
         {
             foreach (DataGridViewColumn col in _grid.Columns)
             {
-                // عمود Fill لا يُحفظ عرضه
                 if (col.AutoSizeMode == DataGridViewAutoSizeColumnMode.Fill) continue;
                 var w = prefs.GetColumnWidth(GridKey, col.Name);
                 if (w.HasValue && w.Value > 0) col.Width = w.Value;
@@ -266,7 +265,6 @@ public class ProductsUserControl : UserControl
         }
     }
 
-    /// <summary>يشترك في حدث تغيير عرض العمود لحفظه تلقائيًا (بند 12).</summary>
     private void HookColumnWidthTracking()
     {
         _grid.ColumnWidthChanged += (_, e) =>

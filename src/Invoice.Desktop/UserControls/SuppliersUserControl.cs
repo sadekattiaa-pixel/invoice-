@@ -104,7 +104,8 @@ public class SuppliersUserControl : UserControl
             RightToLeft = RightToLeft.Yes,
             Font = new Font("Segoe UI", 10F),
             ColumnHeadersHeight = 36,
-            EnableHeadersVisualStyles = false
+            EnableHeadersVisualStyles = false,
+            ScrollBars = ScrollBars.Both   // بند 4: تمرير أفقي ورأسي
         };
         _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(30, 60, 120);
         _grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;

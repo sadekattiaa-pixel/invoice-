@@ -16,13 +16,11 @@ public class ArchiveUserControl : UserControl
 {
     private const string GridKey = "Archive";
 
-    // ============ Toolbar ============
     private Button _btnRefresh = null!;
     private Button _btnColumns = null!;
     private Button _btnExportPdf = null!;
     private Button _btnExportExcel = null!;
 
-    // ============ Filters ============
     private TextBox _txtSearch = null!;
     private ComboBox _cmbStatus = null!;
     private ComboBox _cmbSupplier = null!;
@@ -30,11 +28,9 @@ public class ArchiveUserControl : UserControl
     private DateTimePicker _dtFrom = null!;
     private DateTimePicker _dtTo = null!;
 
-    // ============ Grid + status ============
     private DataGridView _grid = null!;
     private Label _lblStatus = null!;
 
-    // ============ Data ============
     private List<InvoiceListRow> _all = new();
     private List<SupplierItem> _suppliers = new();
 
@@ -52,10 +48,6 @@ public class ArchiveUserControl : UserControl
         Load += async (_, _) => await LoadAllAsync();
     }
 
-    // ============================================================
-    // UI Construction
-    // ============================================================
-
     private void BuildUi()
     {
         Dock = DockStyle.Fill;
@@ -64,7 +56,6 @@ public class ArchiveUserControl : UserControl
         Font = new Font("Segoe UI", 10F);
         Padding = new Padding(10);
 
-        // ============ شريط الأدوات ============
         var toolbar = new Panel
         {
             Dock = DockStyle.Top,
@@ -90,7 +81,6 @@ public class ArchiveUserControl : UserControl
             _btnRefresh, _btnColumns, _btnExportPdf, _btnExportExcel
         });
 
-        // ============ لوحة الفلاتر ============
         var filterPanel = new Panel
         {
             Dock = DockStyle.Top,
@@ -195,7 +185,6 @@ public class ArchiveUserControl : UserControl
             _dtTo.Location = new Point(filterPanel.Width - 600, row2Y);
         };
 
-        // ============ الجدول ============
         _grid = new DataGridView
         {
             Dock = DockStyle.Fill,
@@ -213,7 +202,8 @@ public class ArchiveUserControl : UserControl
             RightToLeft = RightToLeft.Yes,
             Font = new Font("Segoe UI", 10F),
             ColumnHeadersHeight = 36,
-            EnableHeadersVisualStyles = false
+            EnableHeadersVisualStyles = false,
+            ScrollBars = ScrollBars.Both   // بند 4: تمرير أفقي ورأسي
         };
         _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(30, 60, 120);
         _grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
@@ -238,7 +228,6 @@ public class ArchiveUserControl : UserControl
         AddGridColumn("ProfitMargin", "الهامش %", 90, "N4", DataGridViewContentAlignment.MiddleCenter);
         AddGridColumn("ArchivedAt", "تاريخ الأرشفة", 140, "yyyy-MM-dd HH:mm", DataGridViewContentAlignment.MiddleCenter);
 
-        // ============ شريط الحالة ============
         _lblStatus = new Label
         {
             Dock = DockStyle.Bottom,
@@ -433,7 +422,6 @@ public class ArchiveUserControl : UserControl
             var endpoint = $"exports/invoice/{row.Id}/{format}";
             var bytes = await ApiClient.Instance.DownloadAsync(endpoint, exportHidden);
 
-            // ============ PDF: معاينة أولًا (بند 16) ============
             if (format.Equals("pdf", StringComparison.OrdinalIgnoreCase))
             {
                 var suggestedName = $"{row.InvoiceNo}.pdf";
@@ -450,7 +438,6 @@ public class ArchiveUserControl : UserControl
                 return;
             }
 
-            // ============ Excel: حفظ مباشر ============
             using var sfd = new SaveFileDialog
             {
                 Filter = "Excel Files (*.xlsx)|*.xlsx",
