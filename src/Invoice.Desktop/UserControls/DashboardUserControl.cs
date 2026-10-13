@@ -1,10 +1,12 @@
 using System.Text.Json;
+using Invoice.Desktop.Models;
 using Invoice.Desktop.Services;
 
 namespace Invoice.Desktop.UserControls;
 
 /// <summary>
-/// لوحة التحكم — تعرض KPIs من /api/reports/dashboard.
+/// لوحة التحكم — تعرض KPIs من /api/reports/dashboard + جدول الفواتير غير المؤرشفة (Draft).
+/// النقر المزدوج على فاتورة في الجدول يُطلِق حدث InvoiceOpenRequested.
 /// </summary>
 public class DashboardUserControl : UserControl
 {
@@ -12,6 +14,17 @@ public class DashboardUserControl : UserControl
     private Button _btnRefresh = null!;
     private Label _lblStatus = null!;
     private FlowLayoutPanel _cardsPanel = null!;
+
+    // ============ قائمة المسودات ============
+    private Panel _draftPanel = null!;
+    private DataGridView _draftGrid = null!;
+    private Label _lblDraftTitle = null!;
+    private Label _lblDraftCount = null!;
+
+    private List<InvoiceListRow> _drafts = new();
+
+    /// <summary>يُطلَق عند النقر المزدوج على مسودة — يمرر معرّف الفاتورة.</summary>
+    public event Action<long>? InvoiceOpenRequested;
 
     public DashboardUserControl()
     {
@@ -55,7 +68,7 @@ public class DashboardUserControl : UserControl
         {
             "اليوم", "هذا الأسبوع", "هذا الشهر", "هذا الربع", "هذه السنة", "الكل"
         });
-        _cmbPeriod.SelectedIndex = 4; // السنة
+        _cmbPeriod.SelectedIndex = 4;
         _cmbPeriod.SelectedIndexChanged += async (_, _) => await LoadDataAsync();
 
         _btnRefresh = new Button
@@ -96,9 +109,143 @@ public class DashboardUserControl : UserControl
             BackColor = Color.White
         };
 
-        Controls.Add(_cardsPanel);
-        Controls.Add(_lblStatus);
-        Controls.Add(toolbar);
+        // ============ منطقة المسودات ============
+        _draftPanel = BuildDraftPanel();
+
+        // ============ التركيب ============
+        // ترتيب الإضافة مهم (يُعالج بترتيب عكسي):
+        Controls.Add(_cardsPanel);   // يُرسى أخيرًا → Fill
+        Controls.Add(_draftPanel);   // يُرسى قبل status → Bottom (فوق status)
+        Controls.Add(_lblStatus);    // يُرسى قبل toolbar → Bottom (الأسفل تمامًا)
+        Controls.Add(toolbar);       // يُرسى أولًا → Top
+    }
+
+    private Panel BuildDraftPanel()
+    {
+        var panel = new Panel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 240,
+            BackColor = Color.White,
+            Padding = new Padding(0, 8, 0, 0)
+        };
+
+        // ============ رأس القسم ============
+        var header = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 32,
+            BackColor = Color.FromArgb(230, 240, 250)
+        };
+
+        _lblDraftTitle = new Label
+        {
+            Text = "الفواتير غير المؤرشفة (مسودات)",
+            Dock = DockStyle.Right,
+            Width = 300,
+            TextAlign = ContentAlignment.MiddleRight,
+            Padding = new Padding(0, 0, 12, 0),
+            Font = new Font("Segoe UI", 10.5F, FontStyle.Bold),
+            ForeColor = Color.FromArgb(30, 60, 120)
+        };
+
+        _lblDraftCount = new Label
+        {
+            Text = "",
+            Dock = DockStyle.Left,
+            Width = 200,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(12, 0, 0, 0),
+            Font = new Font("Segoe UI", 9F),
+            ForeColor = Color.DimGray
+        };
+
+        header.Controls.Add(_lblDraftTitle);
+        header.Controls.Add(_lblDraftCount);
+
+        // ============ الجدول ============
+        _draftGrid = new DataGridView
+        {
+            Dock = DockStyle.Fill,
+            AutoGenerateColumns = false,
+            AllowUserToAddRows = false,
+            AllowUserToDeleteRows = false,
+            AllowUserToResizeRows = false,
+            ReadOnly = true,
+            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+            MultiSelect = false,
+            RowHeadersVisible = false,
+            BackgroundColor = Color.White,
+            BorderStyle = BorderStyle.FixedSingle,
+            RightToLeft = RightToLeft.Yes,
+            Font = new Font("Segoe UI", 9.5F),
+            ColumnHeadersHeight = 32,
+            EnableHeadersVisualStyles = false
+        };
+        _draftGrid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(30, 60, 120);
+        _draftGrid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+        _draftGrid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 9.5F, FontStyle.Bold);
+        _draftGrid.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+        _draftGrid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(200, 220, 250);
+        _draftGrid.DefaultCellStyle.SelectionForeColor = Color.Black;
+        _draftGrid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(245, 245, 250);
+        _draftGrid.RowTemplate.Height = 28;
+        _draftGrid.CellDoubleClick += (_, _) => OnDraftDoubleClick();
+
+        _draftGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "InvoiceNo", DataPropertyName = "InvoiceNo", HeaderText = "رقم الفاتورة", Width = 150 });
+        _draftGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "SupplierInvoiceNo", DataPropertyName = "SupplierInvoiceNo", HeaderText = "رقم فاتورة المورد", Width = 150
+        });
+        _draftGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "InvoiceDate", DataPropertyName = "InvoiceDate", HeaderText = "التاريخ", Width = 110,
+            DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd", Alignment = DataGridViewContentAlignment.MiddleCenter }
+        });
+        _draftGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "SupplierName", DataPropertyName = "SupplierName", HeaderText = "المورد",
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
+        });
+        _draftGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "TotalQty", DataPropertyName = "TotalQty", HeaderText = "الكمية", Width = 90,
+            DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
+        });
+        _draftGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "TotalUsd", DataPropertyName = "TotalUsd", HeaderText = "القيمة $", Width = 110,
+            DefaultCellStyle = new DataGridViewCellStyle { Format = "N2", Alignment = DataGridViewContentAlignment.MiddleCenter }
+        });
+        _draftGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "TotalProfit", DataPropertyName = "TotalProfit", HeaderText = "الربح", Width = 110,
+            DefaultCellStyle = new DataGridViewCellStyle { Format = "N2", Alignment = DataGridViewContentAlignment.MiddleCenter }
+        });
+
+        // ============ تلميح صغير ============
+        var lblHint = new Label
+        {
+            Dock = DockStyle.Bottom,
+            Height = 20,
+            Text = "انقر نقرًا مزدوجًا على أي مسودة لفتحها في شاشة الفاتورة.",
+            TextAlign = ContentAlignment.MiddleRight,
+            Padding = new Padding(0, 0, 10, 0),
+            Font = new Font("Segoe UI", 8.5F),
+            ForeColor = Color.Gray
+        };
+
+        panel.Controls.Add(_draftGrid);
+        panel.Controls.Add(lblHint);
+        panel.Controls.Add(header);
+
+        return panel;
+    }
+
+    private void OnDraftDoubleClick()
+    {
+        if (_draftGrid.CurrentRow?.DataBoundItem is not InvoiceListRow row) return;
+        InvoiceOpenRequested?.Invoke(row.Id);
     }
 
     private async Task LoadDataAsync()
@@ -106,6 +253,7 @@ public class DashboardUserControl : UserControl
         _cardsPanel.Controls.Clear();
         _lblStatus.Text = "جارٍ التحميل...";
         _lblStatus.ForeColor = Color.DimGray;
+        _lblDraftCount.Text = "";
 
         try
         {
@@ -127,6 +275,9 @@ public class DashboardUserControl : UserControl
             AddCard("عدد الموردين", GetInt(data, "catalog", "suppliers"));
             AddCard("عدد الأصناف", GetInt(data, "catalog", "products"));
 
+            // ============ تحميل المسودات ============
+            await LoadDraftsAsync();
+
             _lblStatus.Text = $"آخر تحديث: {DateTime.Now:HH:mm:ss}";
             _lblStatus.ForeColor = Color.SeaGreen;
         }
@@ -134,6 +285,27 @@ public class DashboardUserControl : UserControl
         {
             _lblStatus.Text = "خطأ: " + ex.Message;
             _lblStatus.ForeColor = Color.Firebrick;
+        }
+    }
+
+    /// <summary>تحميل الفواتير غير المؤرشفة (Draft) من الـ API.</summary>
+    private async Task LoadDraftsAsync()
+    {
+        try
+        {
+            var drafts = await ApiClient.Instance
+                .GetAsync<List<InvoiceListRow>>("invoices?status=Draft") ?? new();
+
+            _drafts = drafts;
+            _draftGrid.DataSource = null;
+            _draftGrid.DataSource = _drafts.ToList();
+            _lblDraftCount.Text = $"عدد المسودات: {_drafts.Count}";
+        }
+        catch (Exception ex)
+        {
+            _draftGrid.DataSource = null;
+            _lblDraftCount.Text = "تعذّر تحميل المسودات: " + ex.Message;
+            _lblDraftCount.ForeColor = Color.Firebrick;
         }
     }
 

@@ -254,7 +254,7 @@ public class MainForm : Form
 
         Control? page = pageKey switch
         {
-            "Dashboard" => new DashboardUserControl(),
+            "Dashboard" => CreateDashboardPage(),
             "Suppliers" => new SuppliersUserControl(),
             "Products" => new ProductsUserControl(),
             "Invoice" => CreateInvoicePage(),
@@ -288,7 +288,15 @@ public class MainForm : Form
         return archive;
     }
 
-    /// <summary>عند النقر المزدوج على فاتورة في الأرشيف: انتقل لشاشة الفاتورة وافتحها.</summary>
+    /// <summary>ينشئ لوحة التحكم ويشترك في حدث فتح فاتورة (بند 2).</summary>
+    private Control CreateDashboardPage()
+    {
+        var dashboard = new DashboardUserControl();
+        dashboard.InvoiceOpenRequested += OnInvoiceOpenRequested;
+        return dashboard;
+    }
+
+    /// <summary>عند النقر المزدوج على فاتورة (في الأرشيف أو لوحة التحكم): انتقل لشاشة الفاتورة وافتحها.</summary>
     private void OnInvoiceOpenRequested(long id)
     {
         Navigate("Invoice");
