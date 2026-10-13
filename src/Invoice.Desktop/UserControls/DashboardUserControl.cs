@@ -10,6 +10,8 @@ namespace Invoice.Desktop.UserControls;
 /// </summary>
 public class DashboardUserControl : UserControl
 {
+    private const string GridKey = "DashboardDrafts";
+
     private ComboBox _cmbPeriod = null!;
     private Button _btnRefresh = null!;
     private Label _lblStatus = null!;
@@ -23,12 +25,16 @@ public class DashboardUserControl : UserControl
 
     private List<InvoiceListRow> _drafts = new();
 
+    private bool _suppressWidthSave = false;
+
     /// <summary>يُطلَق عند النقر المزدوج على مسودة — يمرر معرّف الفاتورة.</summary>
     public event Action<long>? InvoiceOpenRequested;
 
     public DashboardUserControl()
     {
         BuildUi();
+        ApplyColumnWidths();
+        HookColumnWidthTracking();
         Load += async (_, _) => await LoadDataAsync();
     }
 
@@ -113,11 +119,10 @@ public class DashboardUserControl : UserControl
         _draftPanel = BuildDraftPanel();
 
         // ============ التركيب ============
-        // ترتيب الإضافة مهم (يُعالج بترتيب عكسي):
-        Controls.Add(_cardsPanel);   // يُرسى أخيرًا → Fill
-        Controls.Add(_draftPanel);   // يُرسى قبل status → Bottom (فوق status)
-        Controls.Add(_lblStatus);    // يُرسى قبل toolbar → Bottom (الأسفل تمامًا)
-        Controls.Add(toolbar);       // يُرسى أولًا → Top
+        Controls.Add(_cardsPanel);
+        Controls.Add(_draftPanel);
+        Controls.Add(_lblStatus);
+        Controls.Add(toolbar);
     }
 
     private Panel BuildDraftPanel()
@@ -171,6 +176,7 @@ public class DashboardUserControl : UserControl
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
             AllowUserToResizeRows = false,
+            AllowUserToResizeColumns = true,
             ReadOnly = true,
             SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             MultiSelect = false,
@@ -242,6 +248,40 @@ public class DashboardUserControl : UserControl
         return panel;
     }
 
+    // ============ Column Widths (بند 12) ============
+
+    private void ApplyColumnWidths()
+    {
+        var prefs = PreferencesService.Instance;
+        _suppressWidthSave = true;
+        try
+        {
+            foreach (DataGridViewColumn col in _draftGrid.Columns)
+            {
+                if (col.AutoSizeMode == DataGridViewAutoSizeColumnMode.Fill) continue;
+                var w = prefs.GetColumnWidth(GridKey, col.Name);
+                if (w.HasValue && w.Value > 0) col.Width = w.Value;
+            }
+        }
+        finally
+        {
+            _suppressWidthSave = false;
+        }
+    }
+
+    private void HookColumnWidthTracking()
+    {
+        _draftGrid.ColumnWidthChanged += (_, e) =>
+        {
+            if (_suppressWidthSave) return;
+            if (e.Column == null) return;
+            if (e.Column.AutoSizeMode == DataGridViewAutoSizeColumnMode.Fill) return;
+            if (e.Column.Width <= 0) return;
+
+            PreferencesService.Instance.SetColumnWidth(GridKey, e.Column.Name, e.Column.Width);
+        };
+    }
+
     private void OnDraftDoubleClick()
     {
         if (_draftGrid.CurrentRow?.DataBoundItem is not InvoiceListRow row) return;
@@ -275,7 +315,6 @@ public class DashboardUserControl : UserControl
             AddCard("عدد الموردين", GetInt(data, "catalog", "suppliers"));
             AddCard("عدد الأصناف", GetInt(data, "catalog", "products"));
 
-            // ============ تحميل المسودات ============
             await LoadDraftsAsync();
 
             _lblStatus.Text = $"آخر تحديث: {DateTime.Now:HH:mm:ss}";
@@ -288,7 +327,6 @@ public class DashboardUserControl : UserControl
         }
     }
 
-    /// <summary>تحميل الفواتير غير المؤرشفة (Draft) من الـ API.</summary>
     private async Task LoadDraftsAsync()
     {
         try
@@ -381,8 +419,6 @@ public class DashboardUserControl : UserControl
         4 => "year",
         _ => "all"
     };
-
-    // ============ استخراج القيم من JsonElement ============
 
     private static decimal GetDecimal(JsonElement root, string section, string prop)
     {

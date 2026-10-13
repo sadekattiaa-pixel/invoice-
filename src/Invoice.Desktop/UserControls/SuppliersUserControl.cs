@@ -9,6 +9,8 @@ namespace Invoice.Desktop.UserControls;
 /// </summary>
 public class SuppliersUserControl : UserControl
 {
+    private const string GridKey = "Suppliers";
+
     private DataGridView _grid = null!;
     private TextBox _txtSearch = null!;
     private Button _btnRefresh = null!;
@@ -18,9 +20,13 @@ public class SuppliersUserControl : UserControl
     private Label _lblStatus = null!;
     private List<SupplierRow> _allData = new();
 
+    private bool _suppressWidthSave = false;
+
     public SuppliersUserControl()
     {
         BuildUi();
+        ApplyColumnWidths();
+        HookColumnWidthTracking();
         Load += async (_, _) => await LoadDataAsync();
     }
 
@@ -88,6 +94,7 @@ public class SuppliersUserControl : UserControl
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
             AllowUserToResizeRows = false,
+            AllowUserToResizeColumns = true,
             ReadOnly = true,
             SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             MultiSelect = false,
@@ -109,12 +116,12 @@ public class SuppliersUserControl : UserControl
         _grid.RowTemplate.Height = 30;
         _grid.CellDoubleClick += async (_, _) => await OnEditAsync();
 
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Id", HeaderText = "المعرّف", Width = 70, DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleCenter } });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Code", HeaderText = "الكود", Width = 100 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "الاسم", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Phone", HeaderText = "الهاتف", Width = 130 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Email", HeaderText = "الإيميل", Width = 180 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Address", HeaderText = "العنوان", Width = 250 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Id", DataPropertyName = "Id", HeaderText = "المعرّف", Width = 70, DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleCenter } });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Code", DataPropertyName = "Code", HeaderText = "الكود", Width = 100 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Name", DataPropertyName = "Name", HeaderText = "الاسم", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Phone", DataPropertyName = "Phone", HeaderText = "الهاتف", Width = 130 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Email", DataPropertyName = "Email", HeaderText = "الإيميل", Width = 180 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Address", DataPropertyName = "Address", HeaderText = "العنوان", Width = 250 });
 
         // ============ شريط الحالة ============
         _lblStatus = new Label
@@ -130,6 +137,40 @@ public class SuppliersUserControl : UserControl
         Controls.Add(_grid);
         Controls.Add(_lblStatus);
         Controls.Add(toolbar);
+    }
+
+    // ============ Column Widths (بند 12) ============
+
+    private void ApplyColumnWidths()
+    {
+        var prefs = PreferencesService.Instance;
+        _suppressWidthSave = true;
+        try
+        {
+            foreach (DataGridViewColumn col in _grid.Columns)
+            {
+                if (col.AutoSizeMode == DataGridViewAutoSizeColumnMode.Fill) continue;
+                var w = prefs.GetColumnWidth(GridKey, col.Name);
+                if (w.HasValue && w.Value > 0) col.Width = w.Value;
+            }
+        }
+        finally
+        {
+            _suppressWidthSave = false;
+        }
+    }
+
+    private void HookColumnWidthTracking()
+    {
+        _grid.ColumnWidthChanged += (_, e) =>
+        {
+            if (_suppressWidthSave) return;
+            if (e.Column == null) return;
+            if (e.Column.AutoSizeMode == DataGridViewAutoSizeColumnMode.Fill) return;
+            if (e.Column.Width <= 0) return;
+
+            PreferencesService.Instance.SetColumnWidth(GridKey, e.Column.Name, e.Column.Width);
+        };
     }
 
     private static Button MakeButton(string text, Color back, int x)

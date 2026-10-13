@@ -23,10 +23,14 @@ public class ProductsUserControl : UserControl
     private List<ProductRow> _allData = new();
     private List<SupplierItem> _suppliers = new();
 
+    private bool _suppressWidthSave = false;
+
     public ProductsUserControl()
     {
         BuildUi();
         ApplyColumnVisibility();
+        ApplyColumnWidths();
+        HookColumnWidthTracking();
         Load += async (_, _) => await LoadAllAsync();
     }
 
@@ -102,6 +106,7 @@ public class ProductsUserControl : UserControl
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
             AllowUserToResizeRows = false,
+            AllowUserToResizeColumns = true,
             ReadOnly = true,
             SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             MultiSelect = false,
@@ -120,14 +125,13 @@ public class ProductsUserControl : UserControl
         _grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(200, 220, 250);
         _grid.DefaultCellStyle.SelectionForeColor = Color.Black;
         _grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(245, 245, 250);
-        _grid.RowTemplate.Height = 60;   // ← زيادة ارتفاع الصف لإظهار الصورة
+        _grid.RowTemplate.Height = 60;
         _grid.CellDoubleClick += async (_, _) => await OnEditAsync();
-        _grid.CellFormatting += OnCellFormatting;   // ← تحويل اسم الصورة إلى صورة
+        _grid.CellFormatting += OnCellFormatting;
 
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Id", DataPropertyName = "Id", HeaderText = "المعرّف", Width = 70 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Code", DataPropertyName = "Code", HeaderText = "الكود", Width = 140 });
 
-        // عمود الصورة (بند 4)
         _grid.Columns.Add(new DataGridViewImageColumn
         {
             Name = "LayoutImage",
@@ -194,7 +198,6 @@ public class ProductsUserControl : UserControl
         Controls.Add(toolbar);
     }
 
-    /// <summary>يُحوّل اسم ملف الصورة إلى صورة عند رسم الخلية (بند 4).</summary>
     private void OnCellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.ColumnIndex < 0 || e.ColumnIndex >= _grid.Columns.Count) return;
@@ -231,7 +234,7 @@ public class ProductsUserControl : UserControl
         return b;
     }
 
-    // ============ Column Visibility ============
+    // ============ Column Visibility + Widths ============
 
     private void ApplyColumnVisibility()
     {
@@ -240,6 +243,41 @@ public class ProductsUserControl : UserControl
         {
             col.Visible = !prefs.IsColumnHidden(GridKey, col.Name);
         }
+    }
+
+    /// <summary>يستعيد عروض الأعمدة المحفوظة (بند 12).</summary>
+    private void ApplyColumnWidths()
+    {
+        var prefs = PreferencesService.Instance;
+        _suppressWidthSave = true;
+        try
+        {
+            foreach (DataGridViewColumn col in _grid.Columns)
+            {
+                // عمود Fill لا يُحفظ عرضه
+                if (col.AutoSizeMode == DataGridViewAutoSizeColumnMode.Fill) continue;
+                var w = prefs.GetColumnWidth(GridKey, col.Name);
+                if (w.HasValue && w.Value > 0) col.Width = w.Value;
+            }
+        }
+        finally
+        {
+            _suppressWidthSave = false;
+        }
+    }
+
+    /// <summary>يشترك في حدث تغيير عرض العمود لحفظه تلقائيًا (بند 12).</summary>
+    private void HookColumnWidthTracking()
+    {
+        _grid.ColumnWidthChanged += (_, e) =>
+        {
+            if (_suppressWidthSave) return;
+            if (e.Column == null) return;
+            if (e.Column.AutoSizeMode == DataGridViewAutoSizeColumnMode.Fill) return;
+            if (e.Column.Width <= 0) return;
+
+            PreferencesService.Instance.SetColumnWidth(GridKey, e.Column.Name, e.Column.Width);
+        };
     }
 
     private void OnChooseColumns()

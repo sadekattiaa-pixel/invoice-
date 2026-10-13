@@ -37,6 +37,8 @@ public class ArchiveUserControl : UserControl
     private List<InvoiceListRow> _all = new();
     private List<SupplierItem> _suppliers = new();
 
+    private bool _suppressWidthSave = false;
+
     /// <summary>يُطلَق عند النقر المزدوج على فاتورة — يمرر معرّف الفاتورة.</summary>
     public event Action<long>? InvoiceOpenRequested;
 
@@ -44,6 +46,8 @@ public class ArchiveUserControl : UserControl
     {
         BuildUi();
         ColumnsDialog.Apply(_grid, GridKey);
+        ApplyColumnWidths();
+        HookColumnWidthTracking();
         Load += async (_, _) => await LoadAllAsync();
     }
 
@@ -97,13 +101,10 @@ public class ArchiveUserControl : UserControl
         const int row1Y = 8;
         const int row2Y = 50;
 
-        // --- السطر الأول ---
-        // بحث
         var lblSearch = new Label { Text = "بحث:", AutoSize = true, Location = new Point(filterPanel.Width - 65, row1Y + 5), Anchor = AnchorStyles.Top | AnchorStyles.Right };
         _txtSearch = new TextBox { Width = 200, Location = new Point(filterPanel.Width - 270, row1Y), Anchor = AnchorStyles.Top | AnchorStyles.Right };
         _txtSearch.TextChanged += (_, _) => ApplyFilter();
 
-        // الحالة (بند 15: توسيع العرض إلى 160)
         var lblStatus = new Label { Text = "الحالة:", AutoSize = true, Location = new Point(filterPanel.Width - 355, row1Y + 5), Anchor = AnchorStyles.Top | AnchorStyles.Right };
         _cmbStatus = new ComboBox
         {
@@ -116,7 +117,6 @@ public class ArchiveUserControl : UserControl
         _cmbStatus.SelectedIndex = 0;
         _cmbStatus.SelectedIndexChanged += (_, _) => ApplyFilter();
 
-        // المورد (بند 15: توسيع العرض إلى 240)
         var lblSupplier = new Label { Text = "المورد:", AutoSize = true, Location = new Point(filterPanel.Width - 620, row1Y + 5), Anchor = AnchorStyles.Top | AnchorStyles.Right };
         _cmbSupplier = new ComboBox
         {
@@ -129,7 +129,6 @@ public class ArchiveUserControl : UserControl
         };
         _cmbSupplier.SelectedIndexChanged += (_, _) => ApplyFilter();
 
-        // --- السطر الثاني: نطاق التاريخ ---
         _chkUseDates = new CheckBox
         {
             Text = "تقييد بنطاق تاريخ",
@@ -203,6 +202,7 @@ public class ArchiveUserControl : UserControl
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
             AllowUserToResizeRows = false,
+            AllowUserToResizeColumns = true,
             ReadOnly = true,
             SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             MultiSelect = false,
@@ -298,6 +298,40 @@ public class ArchiveUserControl : UserControl
         return b;
     }
 
+    // ============ Column Widths (بند 12) ============
+
+    private void ApplyColumnWidths()
+    {
+        var prefs = PreferencesService.Instance;
+        _suppressWidthSave = true;
+        try
+        {
+            foreach (DataGridViewColumn col in _grid.Columns)
+            {
+                if (col.AutoSizeMode == DataGridViewAutoSizeColumnMode.Fill) continue;
+                var w = prefs.GetColumnWidth(GridKey, col.Name);
+                if (w.HasValue && w.Value > 0) col.Width = w.Value;
+            }
+        }
+        finally
+        {
+            _suppressWidthSave = false;
+        }
+    }
+
+    private void HookColumnWidthTracking()
+    {
+        _grid.ColumnWidthChanged += (_, e) =>
+        {
+            if (_suppressWidthSave) return;
+            if (e.Column == null) return;
+            if (e.Column.AutoSizeMode == DataGridViewAutoSizeColumnMode.Fill) return;
+            if (e.Column.Width <= 0) return;
+
+            PreferencesService.Instance.SetColumnWidth(GridKey, e.Column.Name, e.Column.Width);
+        };
+    }
+
     // ============================================================
     // Data Loading
     // ============================================================
@@ -366,7 +400,6 @@ public class ArchiveUserControl : UserControl
         ColumnsDialog.ShowFor(_grid, GridKey, this);
     }
 
-    /// <summary>عند النقر المزدوج: نطلب من الأب فتح الفاتورة (Draft أو Archived).</summary>
     private void OnGridDoubleClick()
     {
         if (_grid.CurrentRow?.DataBoundItem is not InvoiceListRow row) return;

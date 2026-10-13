@@ -1,4 +1,5 @@
 using Invoice.Desktop.Models;
+using Invoice.Desktop.Services;
 
 namespace Invoice.Desktop.UserControls;
 
@@ -22,6 +23,8 @@ public class InvoiceItemsPanel : UserControl
 
     private const string GridKey = "InvoiceItems";
 
+    private bool _suppressWidthSave = false;
+
     /// <summary>يُطلق عند تغيّر القائمة.</summary>
     public event Action? Changed;
 
@@ -37,6 +40,8 @@ public class InvoiceItemsPanel : UserControl
     {
         BuildUi();
         Shared.ColumnsDialog.Apply(_grid, GridKey);
+        ApplyColumnWidths();
+        HookColumnWidthTracking();
     }
 
     /// <summary>تحميل قائمة الأصناف المتاحة (تُملأ عند الفتح).</summary>
@@ -135,6 +140,7 @@ public class InvoiceItemsPanel : UserControl
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
             AllowUserToResizeRows = false,
+            AllowUserToResizeColumns = true,
             ReadOnly = true,
             SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             MultiSelect = false,
@@ -157,7 +163,6 @@ public class InvoiceItemsPanel : UserControl
         _grid.CellDoubleClick += (_, _) => OnEdit();
         _grid.CellFormatting += OnCellFormatting;
 
-        // ============ Enter → فتح نافذة اختيار الصنف (بند 9) ============
         _grid.KeyDown += (_, e) =>
         {
             if (e.KeyCode == Keys.Enter)
@@ -168,11 +173,9 @@ public class InvoiceItemsPanel : UserControl
             }
         };
 
-        // الأعمدة الأساسية
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "LineNo", DataPropertyName = "LineNo", HeaderText = "#", Width = 40 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "ProductCode", DataPropertyName = "ProductCode", HeaderText = "الكود", Width = 120 });
 
-        // عمود الصورة
         _grid.Columns.Add(new DataGridViewImageColumn
         {
             Name = "ProductImage",
@@ -226,7 +229,6 @@ public class InvoiceItemsPanel : UserControl
             DefaultCellStyle = new DataGridViewCellStyle { Format = "N0", Alignment = DataGridViewContentAlignment.MiddleCenter }
         });
 
-        // أعمدة البند القابلة للتحرير
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
             Name = "Quantity", DataPropertyName = "Quantity", HeaderText = "الكمية", Width = 80,
@@ -261,7 +263,40 @@ public class InvoiceItemsPanel : UserControl
         RefreshGrid();
     }
 
-    /// <summary>يُحوّل اسم ملف الصورة إلى صورة عند رسم الخلية.</summary>
+    // ============ Column Widths (بند 12) ============
+
+    private void ApplyColumnWidths()
+    {
+        var prefs = PreferencesService.Instance;
+        _suppressWidthSave = true;
+        try
+        {
+            foreach (DataGridViewColumn col in _grid.Columns)
+            {
+                if (col.AutoSizeMode == DataGridViewAutoSizeColumnMode.Fill) continue;
+                var w = prefs.GetColumnWidth(GridKey, col.Name);
+                if (w.HasValue && w.Value > 0) col.Width = w.Value;
+            }
+        }
+        finally
+        {
+            _suppressWidthSave = false;
+        }
+    }
+
+    private void HookColumnWidthTracking()
+    {
+        _grid.ColumnWidthChanged += (_, e) =>
+        {
+            if (_suppressWidthSave) return;
+            if (e.Column == null) return;
+            if (e.Column.AutoSizeMode == DataGridViewAutoSizeColumnMode.Fill) return;
+            if (e.Column.Width <= 0) return;
+
+            PreferencesService.Instance.SetColumnWidth(GridKey, e.Column.Name, e.Column.Width);
+        };
+    }
+
     private void OnCellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.ColumnIndex < 0 || e.ColumnIndex >= _grid.Columns.Count) return;
@@ -319,13 +354,11 @@ public class InvoiceItemsPanel : UserControl
     // Public API
     // ============================================================
 
-    /// <summary>تحميل بنود من فاتورة موجودة.</summary>
     public void LoadItems(IEnumerable<InvoiceItemDto> items)
     {
         _items.Clear();
         foreach (var i in items)
         {
-            // ابحث عن بيانات الصنف الكاملة من القائمة المتاحة (إن وُجدت)
             var prod = _allProducts.FirstOrDefault(p => p.Id == i.ProductId);
 
             _items.Add(new ItemEntry
@@ -611,7 +644,6 @@ public class InvoiceItemsPanel : UserControl
                 _btnSave, btnCancel
             });
 
-            // ============ TabIndex ============
             _numQty.TabIndex = 0;
             _numPurchase.TabIndex = 1;
             _numSale.TabIndex = 2;
@@ -620,12 +652,10 @@ public class InvoiceItemsPanel : UserControl
             _btnSave.TabIndex = 4;
             btnCancel.TabIndex = 5;
 
-            // ============ Enter → الحقل التالي (بند 11) ============
             _numQty.KeyDown += (_, e) => HandleEnterNavigation(e, _numPurchase);
             _numPurchase.KeyDown += (_, e) => HandleEnterNavigation(e, _numSale);
             _numSale.KeyDown += (_, e) => HandleEnterNavigation(e, _btnSave);
 
-            // ============ التركيز على حقل الكمية عند الفتح ============
             Shown += (_, _) =>
             {
                 _numQty.Focus();
@@ -633,7 +663,6 @@ public class InvoiceItemsPanel : UserControl
             };
         }
 
-        /// <summary>Enter → الانتقال إلى الحقل التالي المحدد.</summary>
         private static void HandleEnterNavigation(KeyEventArgs e, Control next)
         {
             if (e.KeyCode == Keys.Enter && !e.Shift && !e.Control)

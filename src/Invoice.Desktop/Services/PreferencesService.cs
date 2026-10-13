@@ -83,7 +83,40 @@ public sealed class PreferencesService
     }
 
     // ============================================================
-    // Font Size (للخطوة القادمة — ميزة حجم الخط)
+    // Column Widths (بند 12)
+    // ============================================================
+
+    /// <summary>
+    /// يُرجِع العرض المحفوظ للعمود، أو null إن لم يُحفظ عرض من قبل.
+    /// </summary>
+    public int? GetColumnWidth(string gridKey, string columnName)
+    {
+        lock (_lock)
+        {
+            if (!_data.ColumnWidths.TryGetValue(gridKey, out var map)) return null;
+            if (!map.TryGetValue(columnName, out var width)) return null;
+            return width > 0 ? width : null;
+        }
+    }
+
+    /// <summary>يحفظ عرض العمود.</summary>
+    public void SetColumnWidth(string gridKey, string columnName, int width)
+    {
+        if (width <= 0) return;
+        lock (_lock)
+        {
+            if (!_data.ColumnWidths.TryGetValue(gridKey, out var map))
+            {
+                map = new Dictionary<string, int>();
+                _data.ColumnWidths[gridKey] = map;
+            }
+            map[columnName] = width;
+        }
+        Save();
+    }
+
+    // ============================================================
+    // Font Size
     // ============================================================
 
     /// <summary>حجم الخط الحالي للتطبيق (بالبوينت).</summary>
@@ -98,7 +131,7 @@ public sealed class PreferencesService
     }
 
     // ============================================================
-    // Dark Mode (للخطوة القادمة — ميزة الوضع الداكن)
+    // Dark Mode
     // ============================================================
 
     /// <summary>هل الوضع الداكن مُفعَّل؟</summary>
@@ -161,4 +194,9 @@ public class PreferencesData
 
     /// <summary>الأعمدة المخفية — مفتاح: معرّف الجدول، قيمة: أسماء الأعمدة.</summary>
     public Dictionary<string, HashSet<string>> HiddenColumns { get; set; } = new();
+
+    /// <summary>
+    /// عروض الأعمدة المحفوظة — مفتاح: معرّف الجدول، قيمة: قاموس (اسم العمود → العرض).
+    /// </summary>
+    public Dictionary<string, Dictionary<string, int>> ColumnWidths { get; set; } = new();
 }
