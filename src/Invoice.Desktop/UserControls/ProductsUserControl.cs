@@ -120,11 +120,28 @@ public class ProductsUserControl : UserControl
         _grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(200, 220, 250);
         _grid.DefaultCellStyle.SelectionForeColor = Color.Black;
         _grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(245, 245, 250);
-        _grid.RowTemplate.Height = 30;
+        _grid.RowTemplate.Height = 60;   // ← زيادة ارتفاع الصف لإظهار الصورة
         _grid.CellDoubleClick += async (_, _) => await OnEditAsync();
+        _grid.CellFormatting += OnCellFormatting;   // ← تحويل اسم الصورة إلى صورة
 
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Id", DataPropertyName = "Id", HeaderText = "المعرّف", Width = 70 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Code", DataPropertyName = "Code", HeaderText = "الكود", Width = 140 });
+
+        // عمود الصورة (بند 4)
+        _grid.Columns.Add(new DataGridViewImageColumn
+        {
+            Name = "LayoutImage",
+            DataPropertyName = "LayoutImageFilename",
+            HeaderText = "الصورة",
+            Width = 80,
+            ImageLayout = DataGridViewImageCellLayout.Zoom,
+            DefaultCellStyle = new DataGridViewCellStyle
+            {
+                NullValue = null,
+                Alignment = DataGridViewContentAlignment.MiddleCenter
+            }
+        });
+
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Name", DataPropertyName = "Name", HeaderText = "الاسم", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Category", DataPropertyName = "Category", HeaderText = "التصنيف", Width = 100 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Pattern", DataPropertyName = "Pattern", HeaderText = "النقشة", Width = 120 });
@@ -175,6 +192,25 @@ public class ProductsUserControl : UserControl
         Controls.Add(_grid);
         Controls.Add(_lblStatus);
         Controls.Add(toolbar);
+    }
+
+    /// <summary>يُحوّل اسم ملف الصورة إلى صورة عند رسم الخلية (بند 4).</summary>
+    private void OnCellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
+    {
+        if (e.ColumnIndex < 0 || e.ColumnIndex >= _grid.Columns.Count) return;
+        if (_grid.Columns[e.ColumnIndex].Name != "LayoutImage") return;
+
+        var filename = e.Value as string;
+        if (string.IsNullOrWhiteSpace(filename))
+        {
+            e.Value = null;
+            e.FormattingApplied = true;
+            return;
+        }
+
+        var img = LayoutStorage.TryLoadImage(filename);
+        e.Value = img;
+        e.FormattingApplied = true;
     }
 
     private static Button MakeButton(string text, Color back, int x)
@@ -640,12 +676,10 @@ public class ProductsUserControl : UserControl
             _cmbCategory.SelectedIndexChanged += (_, _) => UpdateFieldsByCategory();
             y += 42;
 
-            // الكود — يظهر لكل التصنيفات الآن (بند 14)
             _lblCode = new Label { Text = "الكود *:", Location = new Point(labelX, y + 5), AutoSize = true };
             _txtCode = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = existing?.Code ?? "" };
             y += 42;
 
-            // الاسم — مخفي دائمًا (لأن الاسم = الكود)
             _lblName = new Label { Text = "الاسم:", Location = new Point(labelX, y + 5), AutoSize = true };
             _txtName = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = existing?.Name ?? "" };
             y += 42;
@@ -793,10 +827,9 @@ public class ProductsUserControl : UserControl
             Controls.Add(btnSave);
             Controls.Add(btnCancel);
 
-            // ============ ترتيب Tab ============
             _cmbCategory.TabIndex = 0;
             _txtCode.TabIndex = 1;
-            _txtName.TabIndex = 2;      // مخفي — لا يُستخدم
+            _txtName.TabIndex = 2;
             _txtAh.TabIndex = 3;
             _txtL.TabIndex = 4;
             _txtW.TabIndex = 5;
@@ -811,7 +844,6 @@ public class ProductsUserControl : UserControl
             btnSave.TabIndex = 12;
             btnCancel.TabIndex = 13;
 
-            // ============ Enter → الحقل التالي ============
             TextBox[] enterFields =
             {
                 _txtCode, _txtAh, _txtL, _txtW, _txtH, _txtOh,
@@ -830,7 +862,6 @@ public class ProductsUserControl : UserControl
                 };
             }
 
-            // ============ التركيز على حقل الكود عند الفتح ============
             Shown += (_, _) =>
             {
                 if (_txtCode.Visible && _txtCode.CanFocus) _txtCode.Focus();
@@ -849,15 +880,10 @@ public class ProductsUserControl : UserControl
         private static string FormatInt(decimal? value)
             => value.HasValue ? ((long)value.Value).ToString() : "";
 
-        /// <summary>
-        /// يضبط ظهور الحقول حسب التصنيف.
-        /// بعد بند 14: الكود يظهر دائمًا، الاسم مخفي دائمًا (لأنه = الكود).
-        /// </summary>
         private void UpdateFieldsByCategory()
         {
             bool isBattery = (_cmbCategory.SelectedItem as string) == "Batteries";
 
-            // حقول البطارية فقط
             _lblAh.Visible = isBattery; _txtAh.Visible = isBattery;
             _lblL.Visible = isBattery; _txtL.Visible = isBattery;
             _lblW.Visible = isBattery; _txtW.Visible = isBattery;
@@ -870,10 +896,8 @@ public class ProductsUserControl : UserControl
             _picLayout.Visible = isBattery;
             _lblPallet.Visible = isBattery; _txtPallet.Visible = isBattery;
 
-            // حقول الإطار فقط
             _lblPattern.Visible = !isBattery; _txtPattern.Visible = !isBattery;
 
-            // الكود يظهر دائمًا — الاسم مخفي دائمًا
             _lblCode.Visible = true; _txtCode.Visible = true;
             _lblName.Visible = false; _txtName.Visible = false;
         }
@@ -913,7 +937,6 @@ public class ProductsUserControl : UserControl
 
             if (supplier == null) { _lblStatus.Text = "الرجاء اختيار مورد."; return; }
 
-            // الكود إلزامي في كل التصنيفات
             var code = _txtCode.Text.Trim();
             if (string.IsNullOrWhiteSpace(code)) { _lblStatus.Text = "كود الصنف مطلوب."; return; }
 
@@ -934,7 +957,7 @@ public class ProductsUserControl : UserControl
                     {
                         category,
                         code,
-                        name = code,             // الاسم = الكود
+                        name = code,
                         supplierId = supplier.Id,
                         ah, l, w, h, oh,
                         layout,
@@ -960,7 +983,6 @@ public class ProductsUserControl : UserControl
             }
             else
             {
-                // الإطار: الكود إلزامي + النقشة إلزامية + الاسم = الكود (بند 14)
                 var pattern = _txtPattern.Text.Trim();
                 if (string.IsNullOrWhiteSpace(pattern)) { _lblStatus.Text = "نقشة الإطار مطلوبة."; return; }
 
@@ -970,7 +992,7 @@ public class ProductsUserControl : UserControl
                     {
                         category,
                         code,
-                        name = code,             // الاسم = الكود
+                        name = code,
                         pattern,
                         supplierId = supplier.Id
                     };
