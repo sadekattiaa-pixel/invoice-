@@ -10,6 +10,12 @@ namespace Invoice.Api.Controllers;
 /// <summary>
 /// نقاط نهاية API للأصناف — CRUD كامل مع قواعد العمل.
 /// كل نقطة تتطلب صلاحية من نوع products.*
+///
+/// قواعد موحّدة لكل التصنيفات (بند 14):
+///   - الكود إلزامي دائمًا.
+///   - الاسم = الكود تلقائيًا.
+///   - Batteries: لها حقول إضافية (Ah, L, W, H, Oh, Layout, Pallet, صورة)، والـ Pattern = null.
+///   - Car/Truck Tires: لها حقل Pattern إلزامي، وباقي الحقول الإضافية = null.
 /// </summary>
 [ApiController]
 [Route("api/products")]
@@ -94,41 +100,41 @@ public class ProductsController : ControllerBase
             return BadRequest(new { message = "المورد غير موجود." });
         }
 
+        // الكود إلزامي في كل التصنيفات (بند 14)
+        if (string.IsNullOrWhiteSpace(product.Code))
+        {
+            return BadRequest(new { message = "كود الصنف مطلوب." });
+        }
+
+        // الاسم = الكود تلقائيًا في كل التصنيفات
+        product.Code = product.Code.Trim();
+        product.Name = product.Code;
+
         if (product.Category == "Batteries")
         {
-            if (string.IsNullOrWhiteSpace(product.Code))
-            {
-                return BadRequest(new { message = "كود البطارية مطلوب." });
-            }
-
-            product.Name = product.Code.Trim();
+            // البطارية: لا نقشة
             product.Pattern = null;
-
-            var existingName = await _db.Products
-                .Where(p => p.Category == "Batteries")
-                .Select(p => p.Name)
-                .ToListAsync();
-
-            var normalizedNew = NormalizeName(product.Name);
-            if (existingName.Any(n => NormalizeName(n) == normalizedNew))
-            {
-                return BadRequest(new { message = "اسم البطارية مستخدم بالفعل." });
-            }
         }
         else
         {
-            if (string.IsNullOrWhiteSpace(product.Name))
-            {
-                return BadRequest(new { message = "اسم الإطار مطلوب." });
-            }
+            // الإطارات: النقشة إلزامية
             if (string.IsNullOrWhiteSpace(product.Pattern))
             {
                 return BadRequest(new { message = "نقشة الإطار مطلوبة." });
             }
 
-            product.Code = GenerateTireCode(product);
+            // تنظيف الحقول الإضافية غير المتعلقة بالإطارات
+            product.Ah = null;
+            product.L = null;
+            product.W = null;
+            product.H = null;
+            product.Oh = null;
+            product.Layout = null;
+            product.LayoutImageFilename = null;
+            product.Pallet = null;
         }
 
+        // التحقق من عدم تكرار الكود
         var codeExists = await _db.Products.AnyAsync(p => p.Code == product.Code);
         if (codeExists)
         {
@@ -171,35 +177,38 @@ public class ProductsController : ControllerBase
             return BadRequest(new { message = "المورد غير موجود." });
         }
 
+        // الكود إلزامي في كل التصنيفات (بند 14)
+        if (string.IsNullOrWhiteSpace(product.Code))
+        {
+            return BadRequest(new { message = "كود الصنف مطلوب." });
+        }
+
+        // الاسم = الكود تلقائيًا
+        product.Code = product.Code.Trim();
+        product.Name = product.Code;
+
         if (product.Category == "Batteries")
         {
-            if (string.IsNullOrWhiteSpace(product.Code))
-            {
-                return BadRequest(new { message = "كود البطارية مطلوب." });
-            }
-            product.Name = product.Code.Trim();
             product.Pattern = null;
-
-            var others = await _db.Products
-                .Where(p => p.Category == "Batteries" && p.Id != id)
-                .Select(p => p.Name)
-                .ToListAsync();
-
-            var normalizedNew = NormalizeName(product.Name);
-            if (others.Any(n => NormalizeName(n) == normalizedNew))
-            {
-                return BadRequest(new { message = "اسم البطارية مستخدم من صنف آخر." });
-            }
         }
         else
         {
-            if (string.IsNullOrWhiteSpace(product.Name) || string.IsNullOrWhiteSpace(product.Pattern))
+            if (string.IsNullOrWhiteSpace(product.Pattern))
             {
-                return BadRequest(new { message = "اسم الإطار والنقشة مطلوبان." });
+                return BadRequest(new { message = "نقشة الإطار مطلوبة." });
             }
-            product.Code = GenerateTireCode(product);
+
+            product.Ah = null;
+            product.L = null;
+            product.W = null;
+            product.H = null;
+            product.Oh = null;
+            product.Layout = null;
+            product.LayoutImageFilename = null;
+            product.Pallet = null;
         }
 
+        // التحقق من عدم تكرار الكود (باستثناء الصنف نفسه)
         var codeTaken = await _db.Products.AnyAsync(p => p.Code == product.Code && p.Id != id);
         if (codeTaken)
         {
@@ -255,28 +264,5 @@ public class ProductsController : ControllerBase
         await _db.SaveChangesAsync();
 
         return NoContent();
-    }
-
-    // ========= دوال مساعدة =========
-
-    /// <summary>تطبيع الاسم: NFKC + إزالة مسافات زائدة + حالة موحّدة.</summary>
-    private static string NormalizeName(string name)
-    {
-        var normalized = name.Normalize(System.Text.NormalizationForm.FormKC);
-        var parts = normalized.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        return string.Join(" ", parts).ToLowerInvariant();
-    }
-
-    /// <summary>
-    /// توليد كود فريد للإطار على أساس (التصنيف + الاسم + النقشة + المورد).
-    /// الطول: "TIRE-" + 32 حرفًا hex = 37 حرفًا (أقل من حد 50).
-    /// </summary>
-    private static string GenerateTireCode(Product product)
-    {
-        var identity = $"{product.Category}|{NormalizeName(product.Name)}|{NormalizeName(product.Pattern ?? "")}|{product.SupplierId}";
-        var bytes = System.Text.Encoding.UTF8.GetBytes(identity);
-        var hash = System.Security.Cryptography.SHA256.HashData(bytes);
-        var hex = Convert.ToHexString(hash).ToLowerInvariant();
-        return "TIRE-" + hex[..32];
     }
 }

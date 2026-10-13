@@ -66,14 +66,12 @@ public class ProductsUserControl : UserControl
         _txtSearch = new TextBox { Width = 180, Location = new Point(toolbar.Width - 260, 17), Anchor = AnchorStyles.Top | AnchorStyles.Right };
         _txtSearch.TextChanged += (_, _) => ApplyFilter();
 
-        // تكبير حقل التصنيف (بند 7)
         var lblCat = new Label { Text = "التصنيف:", AutoSize = true, Location = new Point(toolbar.Width - 340, 20), Anchor = AnchorStyles.Top | AnchorStyles.Right };
         _cmbCategory = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160, Location = new Point(toolbar.Width - 510, 17), Anchor = AnchorStyles.Top | AnchorStyles.Right };
         _cmbCategory.Items.AddRange(new object[] { "الكل", "Batteries", "Car Tires", "Truck Tires" });
         _cmbCategory.SelectedIndex = 0;
         _cmbCategory.SelectedIndexChanged += (_, _) => ApplyFilter();
 
-        // تكبير حقل المورد (بند 7)
         var lblSup = new Label { Text = "المورد:", AutoSize = true, Location = new Point(toolbar.Width - 590, 20), Anchor = AnchorStyles.Top | AnchorStyles.Right };
         _cmbSupplier = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200, Location = new Point(toolbar.Width - 800, 17), Anchor = AnchorStyles.Top | AnchorStyles.Right };
         _cmbSupplier.SelectedIndexChanged += (_, _) => ApplyFilter();
@@ -620,7 +618,7 @@ public class ProductsUserControl : UserControl
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
-            ClientSize = new Size(520, 820); // ← زيادة الارتفاع لإظهار زر الحفظ (بند 6)
+            ClientSize = new Size(520, 820);
             RightToLeft = RightToLeft.Yes;
             Font = new Font("Segoe UI", 10F);
             BackColor = Color.WhiteSmoke;
@@ -642,10 +640,12 @@ public class ProductsUserControl : UserControl
             _cmbCategory.SelectedIndexChanged += (_, _) => UpdateFieldsByCategory();
             y += 42;
 
-            _lblCode = new Label { Text = "الكود:", Location = new Point(labelX, y + 5), AutoSize = true };
+            // الكود — يظهر لكل التصنيفات الآن (بند 14)
+            _lblCode = new Label { Text = "الكود *:", Location = new Point(labelX, y + 5), AutoSize = true };
             _txtCode = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = existing?.Code ?? "" };
             y += 42;
 
+            // الاسم — مخفي دائمًا (لأن الاسم = الكود)
             _lblName = new Label { Text = "الاسم:", Location = new Point(labelX, y + 5), AutoSize = true };
             _txtName = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = existing?.Name ?? "" };
             y += 42;
@@ -715,7 +715,7 @@ public class ProductsUserControl : UserControl
             _txtPallet = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = existing?.Pallet?.ToString() ?? "" };
             y += 42;
 
-            _lblPattern = new Label { Text = "النقشة:", Location = new Point(labelX, y + 5), AutoSize = true };
+            _lblPattern = new Label { Text = "النقشة *:", Location = new Point(labelX, y + 5), AutoSize = true };
             _txtPattern = new TextBox { Location = new Point(fieldX, y), Width = fieldW, Text = existing?.Pattern ?? "" };
             y += 42;
 
@@ -793,17 +793,17 @@ public class ProductsUserControl : UserControl
             Controls.Add(btnSave);
             Controls.Add(btnCancel);
 
-            // ============ ترتيب Tab (بند 13) ============
+            // ============ ترتيب Tab ============
             _cmbCategory.TabIndex = 0;
             _txtCode.TabIndex = 1;
-            _txtName.TabIndex = 2;
+            _txtName.TabIndex = 2;      // مخفي — لا يُستخدم
             _txtAh.TabIndex = 3;
             _txtL.TabIndex = 4;
             _txtW.TabIndex = 5;
             _txtH.TabIndex = 6;
             _txtOh.TabIndex = 7;
             _txtLayout.TabIndex = 8;
-            _btnPickImage.TabStop = false;   // لا يعطّل مسار Enter بين الحقول
+            _btnPickImage.TabStop = false;
             _btnClearImage.TabStop = false;
             _txtPallet.TabIndex = 9;
             _txtPattern.TabIndex = 10;
@@ -811,10 +811,10 @@ public class ProductsUserControl : UserControl
             btnSave.TabIndex = 12;
             btnCancel.TabIndex = 13;
 
-            // ============ Enter → الحقل التالي (بند 13) ============
+            // ============ Enter → الحقل التالي ============
             TextBox[] enterFields =
             {
-                _txtCode, _txtName, _txtAh, _txtL, _txtW, _txtH, _txtOh,
+                _txtCode, _txtAh, _txtL, _txtW, _txtH, _txtOh,
                 _txtLayout, _txtPallet, _txtPattern
             };
             foreach (var tb in enterFields)
@@ -830,11 +830,10 @@ public class ProductsUserControl : UserControl
                 };
             }
 
-            // ============ التركيز على حقل الكود عند الفتح (بند 13) ============
+            // ============ التركيز على حقل الكود عند الفتح ============
             Shown += (_, _) =>
             {
                 if (_txtCode.Visible && _txtCode.CanFocus) _txtCode.Focus();
-                else if (_txtName.Visible && _txtName.CanFocus) _txtName.Focus();
                 else if (_cmbCategory.CanFocus) _cmbCategory.Focus();
             };
 
@@ -850,11 +849,15 @@ public class ProductsUserControl : UserControl
         private static string FormatInt(decimal? value)
             => value.HasValue ? ((long)value.Value).ToString() : "";
 
+        /// <summary>
+        /// يضبط ظهور الحقول حسب التصنيف.
+        /// بعد بند 14: الكود يظهر دائمًا، الاسم مخفي دائمًا (لأنه = الكود).
+        /// </summary>
         private void UpdateFieldsByCategory()
         {
             bool isBattery = (_cmbCategory.SelectedItem as string) == "Batteries";
 
-            _lblCode.Visible = isBattery; _txtCode.Visible = isBattery;
+            // حقول البطارية فقط
             _lblAh.Visible = isBattery; _txtAh.Visible = isBattery;
             _lblL.Visible = isBattery; _txtL.Visible = isBattery;
             _lblW.Visible = isBattery; _txtW.Visible = isBattery;
@@ -867,8 +870,12 @@ public class ProductsUserControl : UserControl
             _picLayout.Visible = isBattery;
             _lblPallet.Visible = isBattery; _txtPallet.Visible = isBattery;
 
-            _lblName.Visible = !isBattery; _txtName.Visible = !isBattery;
+            // حقول الإطار فقط
             _lblPattern.Visible = !isBattery; _txtPattern.Visible = !isBattery;
+
+            // الكود يظهر دائمًا — الاسم مخفي دائمًا
+            _lblCode.Visible = true; _txtCode.Visible = true;
+            _lblName.Visible = false; _txtName.Visible = false;
         }
 
         private void PickImage()
@@ -906,11 +913,12 @@ public class ProductsUserControl : UserControl
 
             if (supplier == null) { _lblStatus.Text = "الرجاء اختيار مورد."; return; }
 
+            // الكود إلزامي في كل التصنيفات
+            var code = _txtCode.Text.Trim();
+            if (string.IsNullOrWhiteSpace(code)) { _lblStatus.Text = "كود الصنف مطلوب."; return; }
+
             if (category == "Batteries")
             {
-                var code = _txtCode.Text.Trim();
-                if (string.IsNullOrWhiteSpace(code)) { _lblStatus.Text = "كود البطارية مطلوب."; return; }
-
                 if (!TryParseNullableDecimalFromInt(_txtAh.Text, out var ah)) { _lblStatus.Text = "Ah يجب أن يكون عددًا صحيحًا."; return; }
                 if (!TryParseNullableDecimalFromInt(_txtL.Text, out var l))   { _lblStatus.Text = "L يجب أن يكون عددًا صحيحًا."; return; }
                 if (!TryParseNullableDecimalFromInt(_txtW.Text, out var w))   { _lblStatus.Text = "W يجب أن يكون عددًا صحيحًا."; return; }
@@ -926,7 +934,7 @@ public class ProductsUserControl : UserControl
                     {
                         category,
                         code,
-                        name = code,
+                        name = code,             // الاسم = الكود
                         supplierId = supplier.Id,
                         ah, l, w, h, oh,
                         layout,
@@ -952,15 +960,33 @@ public class ProductsUserControl : UserControl
             }
             else
             {
-                var name = _txtName.Text.Trim();
+                // الإطار: الكود إلزامي + النقشة إلزامية + الاسم = الكود (بند 14)
                 var pattern = _txtPattern.Text.Trim();
-                if (string.IsNullOrWhiteSpace(name)) { _lblStatus.Text = "اسم الإطار مطلوب."; return; }
                 if (string.IsNullOrWhiteSpace(pattern)) { _lblStatus.Text = "نقشة الإطار مطلوبة."; return; }
 
                 if (existing == null)
-                    Result = new { category, name, pattern, supplierId = supplier.Id };
+                {
+                    Result = new
+                    {
+                        category,
+                        code,
+                        name = code,             // الاسم = الكود
+                        pattern,
+                        supplierId = supplier.Id
+                    };
+                }
                 else
-                    Result = new { id = existing.Id, category, name, pattern, supplierId = supplier.Id };
+                {
+                    Result = new
+                    {
+                        id = existing.Id,
+                        category,
+                        code,
+                        name = code,
+                        pattern,
+                        supplierId = supplier.Id
+                    };
+                }
             }
 
             DialogResult = DialogResult.OK;
