@@ -66,14 +66,16 @@ public class ProductsUserControl : UserControl
         _txtSearch = new TextBox { Width = 180, Location = new Point(toolbar.Width - 260, 17), Anchor = AnchorStyles.Top | AnchorStyles.Right };
         _txtSearch.TextChanged += (_, _) => ApplyFilter();
 
+        // تكبير حقل التصنيف (بند 7)
         var lblCat = new Label { Text = "التصنيف:", AutoSize = true, Location = new Point(toolbar.Width - 340, 20), Anchor = AnchorStyles.Top | AnchorStyles.Right };
-        _cmbCategory = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120, Location = new Point(toolbar.Width - 420, 17), Anchor = AnchorStyles.Top | AnchorStyles.Right };
+        _cmbCategory = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160, Location = new Point(toolbar.Width - 510, 17), Anchor = AnchorStyles.Top | AnchorStyles.Right };
         _cmbCategory.Items.AddRange(new object[] { "الكل", "Batteries", "Car Tires", "Truck Tires" });
         _cmbCategory.SelectedIndex = 0;
         _cmbCategory.SelectedIndexChanged += (_, _) => ApplyFilter();
 
-        var lblSup = new Label { Text = "المورد:", AutoSize = true, Location = new Point(toolbar.Width - 490, 20), Anchor = AnchorStyles.Top | AnchorStyles.Right };
-        _cmbSupplier = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 140, Location = new Point(toolbar.Width - 600, 17), Anchor = AnchorStyles.Top | AnchorStyles.Right };
+        // تكبير حقل المورد (بند 7)
+        var lblSup = new Label { Text = "المورد:", AutoSize = true, Location = new Point(toolbar.Width - 590, 20), Anchor = AnchorStyles.Top | AnchorStyles.Right };
+        _cmbSupplier = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200, Location = new Point(toolbar.Width - 800, 17), Anchor = AnchorStyles.Top | AnchorStyles.Right };
         _cmbSupplier.SelectedIndexChanged += (_, _) => ApplyFilter();
 
         toolbar.Controls.AddRange(new Control[]
@@ -88,10 +90,10 @@ public class ProductsUserControl : UserControl
         {
             _txtSearch.Location = new Point(toolbar.Width - 260, 17);
             lblSearch.Location = new Point(toolbar.Width - 70, 20);
-            _cmbCategory.Location = new Point(toolbar.Width - 420, 17);
+            _cmbCategory.Location = new Point(toolbar.Width - 510, 17);
             lblCat.Location = new Point(toolbar.Width - 340, 20);
-            _cmbSupplier.Location = new Point(toolbar.Width - 600, 17);
-            lblSup.Location = new Point(toolbar.Width - 490, 20);
+            _cmbSupplier.Location = new Point(toolbar.Width - 800, 17);
+            lblSup.Location = new Point(toolbar.Width - 590, 20);
         };
 
         // ============ الجدول ============
@@ -197,7 +199,6 @@ public class ProductsUserControl : UserControl
 
     // ============ Column Visibility ============
 
-    /// <summary>يُطبّق تفضيلات إظهار/إخفاء الأعمدة على الجدول.</summary>
     private void ApplyColumnVisibility()
     {
         var prefs = PreferencesService.Instance;
@@ -503,7 +504,6 @@ public class ProductsUserControl : UserControl
                 panel.Controls.Add(cb);
             }
 
-            // الأزرار
             var btnPanel = new Panel
             {
                 Dock = DockStyle.Bottom,
@@ -544,7 +544,7 @@ public class ProductsUserControl : UserControl
                 Text = "إلغاء",
                 Width = 120,
                 Height = 36,
-                Location = new Point(-80, 10), // خارج النطاق — لا نحتاجه
+                Location = new Point(-80, 10),
                 Visible = false
             };
 
@@ -620,7 +620,7 @@ public class ProductsUserControl : UserControl
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
-            ClientSize = new Size(520, 700);
+            ClientSize = new Size(520, 820); // ← زيادة الارتفاع لإظهار زر الحفظ (بند 6)
             RightToLeft = RightToLeft.Yes;
             Font = new Font("Segoe UI", 10F);
             BackColor = Color.WhiteSmoke;
@@ -792,6 +792,51 @@ public class ProductsUserControl : UserControl
             Controls.Add(_lblStatus);
             Controls.Add(btnSave);
             Controls.Add(btnCancel);
+
+            // ============ ترتيب Tab (بند 13) ============
+            _cmbCategory.TabIndex = 0;
+            _txtCode.TabIndex = 1;
+            _txtName.TabIndex = 2;
+            _txtAh.TabIndex = 3;
+            _txtL.TabIndex = 4;
+            _txtW.TabIndex = 5;
+            _txtH.TabIndex = 6;
+            _txtOh.TabIndex = 7;
+            _txtLayout.TabIndex = 8;
+            _btnPickImage.TabStop = false;   // لا يعطّل مسار Enter بين الحقول
+            _btnClearImage.TabStop = false;
+            _txtPallet.TabIndex = 9;
+            _txtPattern.TabIndex = 10;
+            _cmbSupplier.TabIndex = 11;
+            btnSave.TabIndex = 12;
+            btnCancel.TabIndex = 13;
+
+            // ============ Enter → الحقل التالي (بند 13) ============
+            TextBox[] enterFields =
+            {
+                _txtCode, _txtName, _txtAh, _txtL, _txtW, _txtH, _txtOh,
+                _txtLayout, _txtPallet, _txtPattern
+            };
+            foreach (var tb in enterFields)
+            {
+                tb.KeyDown += (s, e) =>
+                {
+                    if (e.KeyCode == Keys.Enter && !e.Shift && !e.Control)
+                    {
+                        e.SuppressKeyPress = true;
+                        e.Handled = true;
+                        SelectNextControl((Control)s!, forward: true, tabStopOnly: true, nested: true, wrap: true);
+                    }
+                };
+            }
+
+            // ============ التركيز على حقل الكود عند الفتح (بند 13) ============
+            Shown += (_, _) =>
+            {
+                if (_txtCode.Visible && _txtCode.CanFocus) _txtCode.Focus();
+                else if (_txtName.Visible && _txtName.CanFocus) _txtName.Focus();
+                else if (_cmbCategory.CanFocus) _cmbCategory.Focus();
+            };
 
             if (!string.IsNullOrWhiteSpace(existing?.LayoutImageFilename))
             {
