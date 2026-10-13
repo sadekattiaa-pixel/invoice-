@@ -9,6 +9,7 @@ namespace Invoice.Desktop.UserControls;
 /// - فلترة: الحالة، المورد، نطاق تاريخ، بحث.
 /// - إخفاء الأعمدة (ColumnsDialog).
 /// - تصدير PDF/Excel مع نافذة خيارات الأقسام (ExportOptionsDialog).
+/// - النقر المزدوج على فاتورة يطلب فتحها (يُطلِق حدث InvoiceOpenRequested).
 /// </summary>
 public class ArchiveUserControl : UserControl
 {
@@ -35,6 +36,9 @@ public class ArchiveUserControl : UserControl
     // ============ Data ============
     private List<InvoiceListRow> _all = new();
     private List<SupplierItem> _suppliers = new();
+
+    /// <summary>يُطلَق عند النقر المزدوج على فاتورة — يمرر معرّف الفاتورة.</summary>
+    public event Action<long>? InvoiceOpenRequested;
 
     public ArchiveUserControl()
     {
@@ -99,26 +103,26 @@ public class ArchiveUserControl : UserControl
         _txtSearch = new TextBox { Width = 200, Location = new Point(filterPanel.Width - 270, row1Y), Anchor = AnchorStyles.Top | AnchorStyles.Right };
         _txtSearch.TextChanged += (_, _) => ApplyFilter();
 
-        // الحالة
+        // الحالة (بند 15: توسيع العرض إلى 160)
         var lblStatus = new Label { Text = "الحالة:", AutoSize = true, Location = new Point(filterPanel.Width - 355, row1Y + 5), Anchor = AnchorStyles.Top | AnchorStyles.Right };
         _cmbStatus = new ComboBox
         {
             DropDownStyle = ComboBoxStyle.DropDownList,
-            Width = 120,
-            Location = new Point(filterPanel.Width - 440, row1Y),
+            Width = 160,
+            Location = new Point(filterPanel.Width - 520, row1Y),
             Anchor = AnchorStyles.Top | AnchorStyles.Right
         };
         _cmbStatus.Items.AddRange(new object[] { "الكل", "Draft", "Archived" });
         _cmbStatus.SelectedIndex = 0;
         _cmbStatus.SelectedIndexChanged += (_, _) => ApplyFilter();
 
-        // المورد
-        var lblSupplier = new Label { Text = "المورد:", AutoSize = true, Location = new Point(filterPanel.Width - 540, row1Y + 5), Anchor = AnchorStyles.Top | AnchorStyles.Right };
+        // المورد (بند 15: توسيع العرض إلى 240)
+        var lblSupplier = new Label { Text = "المورد:", AutoSize = true, Location = new Point(filterPanel.Width - 620, row1Y + 5), Anchor = AnchorStyles.Top | AnchorStyles.Right };
         _cmbSupplier = new ComboBox
         {
             DropDownStyle = ComboBoxStyle.DropDownList,
-            Width = 180,
-            Location = new Point(filterPanel.Width - 740, row1Y),
+            Width = 240,
+            Location = new Point(filterPanel.Width - 865, row1Y),
             Anchor = AnchorStyles.Top | AnchorStyles.Right,
             DisplayMember = "Name",
             ValueMember = "Id"
@@ -178,11 +182,11 @@ public class ArchiveUserControl : UserControl
             _txtSearch.Location = new Point(filterPanel.Width - 270, row1Y);
             lblSearch.Location = new Point(filterPanel.Width - 65, row1Y + 5);
 
-            _cmbStatus.Location = new Point(filterPanel.Width - 440, row1Y);
+            _cmbStatus.Location = new Point(filterPanel.Width - 520, row1Y);
             lblStatus.Location = new Point(filterPanel.Width - 355, row1Y + 5);
 
-            _cmbSupplier.Location = new Point(filterPanel.Width - 740, row1Y);
-            lblSupplier.Location = new Point(filterPanel.Width - 540, row1Y + 5);
+            _cmbSupplier.Location = new Point(filterPanel.Width - 865, row1Y);
+            lblSupplier.Location = new Point(filterPanel.Width - 620, row1Y + 5);
 
             _chkUseDates.Location = new Point(filterPanel.Width - 175, row2Y + 5);
             lblFrom.Location = new Point(filterPanel.Width - 260, row2Y + 5);
@@ -218,6 +222,7 @@ public class ArchiveUserControl : UserControl
         _grid.DefaultCellStyle.SelectionForeColor = Color.Black;
         _grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(245, 245, 250);
         _grid.RowTemplate.Height = 30;
+        _grid.CellDoubleClick += (_, _) => OnGridDoubleClick();
 
         AddGridColumn("InvoiceNo", "رقم الفاتورة", 150);
         AddGridColumn("SupplierInvoiceNo", "رقم فاتورة المورد", 140);
@@ -302,7 +307,6 @@ public class ArchiveUserControl : UserControl
         SetStatus("جارٍ التحميل...", Color.DimGray);
         try
         {
-            // الموردون
             _suppliers = await ApiClient.Instance.GetAsync<List<SupplierItem>>("suppliers") ?? new();
             var supItems = new List<SupplierItem> { new() { Id = 0, Name = "الكل" } };
             supItems.AddRange(_suppliers);
@@ -312,7 +316,6 @@ public class ArchiveUserControl : UserControl
             _cmbSupplier.ValueMember = "Id";
             _cmbSupplier.SelectedIndex = 0;
 
-            // الفواتير
             _all = await ApiClient.Instance.GetAsync<List<InvoiceListRow>>("invoices") ?? new();
             ApplyFilter();
         }
@@ -363,6 +366,13 @@ public class ArchiveUserControl : UserControl
         ColumnsDialog.ShowFor(_grid, GridKey, this);
     }
 
+    /// <summary>عند النقر المزدوج: نطلب من الأب فتح الفاتورة (Draft أو Archived).</summary>
+    private void OnGridDoubleClick()
+    {
+        if (_grid.CurrentRow?.DataBoundItem is not InvoiceListRow row) return;
+        InvoiceOpenRequested?.Invoke(row.Id);
+    }
+
     private async Task OnExportAsync(string format)
     {
         if (_grid.CurrentRow?.DataBoundItem is not InvoiceListRow row)
@@ -379,9 +389,8 @@ public class ArchiveUserControl : UserControl
             return;
         }
 
-        // نافذة خيارات الأقسام — بدون قائمة أولية (لا نعرف حالة سابقة).
         var exportHidden = ExportOptionsDialog.ShowFor(this, null);
-        if (exportHidden == null) return; // المستخدم ألغى
+        if (exportHidden == null) return;
 
         try
         {

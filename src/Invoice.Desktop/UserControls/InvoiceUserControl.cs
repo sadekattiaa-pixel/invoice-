@@ -61,12 +61,32 @@ public class InvoiceUserControl : UserControl
     private List<ProductPickerDialog.ProductItem> _products = new();
     private InvoiceCalculationResult? _lastCalculation;
 
+    // ============ Programmatic open ============
+    private long? _pendingOpenInvoiceId = null;
+    private bool _lookupsLoaded = false;
+
     private const string GridKey = "InvoiceItems";
 
     public InvoiceUserControl()
     {
         BuildUi();
         Load += async (_, _) => await LoadLookupsAsync();
+    }
+
+    /// <summary>
+    /// طلب فتح فاتورة برمجيًا (يُستخدم من صفحة الأرشيف أو لوحة التحكم).
+    /// إن كانت الـ lookups جاهزة → يفتح فورًا، وإلا → يُخزَّن الطلب حتى تجهز.
+    /// </summary>
+    public void RequestOpenInvoice(long id)
+    {
+        if (_lookupsLoaded)
+        {
+            _ = LoadInvoiceByIdAsync(id);
+        }
+        else
+        {
+            _pendingOpenInvoiceId = id;
+        }
     }
 
     // ============================================================
@@ -169,7 +189,6 @@ public class InvoiceUserControl : UserControl
             Padding = new Point(22, 8)
         };
 
-        // ============ تبويب 1: بيانات المورد والملاحظات ============
         var tabSupplier = new TabPage("بيانات المورد والملاحظات")
         {
             BackColor = Color.White,
@@ -178,7 +197,6 @@ public class InvoiceUserControl : UserControl
         tabSupplier.Controls.Add(BuildNotesTab());
         tabSupplier.Controls.Add(BuildHeader());
 
-        // ============ تبويب 2: الأصناف ============
         var tabItems = new TabPage("الأصناف")
         {
             BackColor = Color.White,
@@ -188,7 +206,6 @@ public class InvoiceUserControl : UserControl
         _itemsPanel.Changed += () => _lastCalculation = null;
         tabItems.Controls.Add(_itemsPanel);
 
-        // ============ تبويب 3: المدفوعات والخصومات والمصاريف ============
         var tabAmounts = new TabPage("المدفوعات والخصومات والمصاريف")
         {
             BackColor = Color.White,
@@ -218,10 +235,9 @@ public class InvoiceUserControl : UserControl
             BackColor = Color.White,
             Padding = new Padding(0)
         };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f)); // يسار
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f)); // يمين
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
 
-        // ---------- العمود الأيسر: المدفوعات (أعلى) + الخصومات (أسفل) ----------
         var leftSide = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -242,12 +258,11 @@ public class InvoiceUserControl : UserControl
         leftSide.Controls.Add(_paymentsPanel, 0, 0);
         leftSide.Controls.Add(_discountsPanel, 0, 1);
 
-        // ---------- العمود الأيمن: المصاريف (كامل الارتفاع) ----------
         _expensesPanel = new InvoiceAmountsPanel { Dock = DockStyle.Fill, Title = "المصاريف" };
         _expensesPanel.Changed += () => _lastCalculation = null;
 
-        layout.Controls.Add(leftSide, 0, 0);        // يسار
-        layout.Controls.Add(_expensesPanel, 1, 0);  // يمين
+        layout.Controls.Add(leftSide, 0, 0);
+        layout.Controls.Add(_expensesPanel, 1, 0);
 
         return layout;
     }
@@ -539,7 +554,20 @@ public class InvoiceUserControl : UserControl
             _products = prods;
             _itemsPanel.SetAvailableProducts(prods);
 
-            await OnNewAsync();
+            _lookupsLoaded = true;
+
+            // هل هناك طلب فتح فاتورة مُعلَّق؟
+            if (_pendingOpenInvoiceId.HasValue)
+            {
+                var id = _pendingOpenInvoiceId.Value;
+                _pendingOpenInvoiceId = null;
+                await LoadInvoiceByIdAsync(id);
+            }
+            else
+            {
+                await OnNewAsync();
+            }
+
             SetStatus("جاهز", Color.SeaGreen);
         }
         catch (Exception ex)

@@ -5,7 +5,6 @@ namespace Invoice.Desktop.Forms;
 
 /// <summary>
 /// النافذة الرئيسية — تحتوي على قائمة جانبية ومنطقة محتوى.
-/// الصفحات (UserControls) تُضاف تدريجيًا في الخطوات القادمة.
 /// </summary>
 public class MainForm : Form
 {
@@ -18,6 +17,9 @@ public class MainForm : Form
 
     private readonly Dictionary<string, Button> _navButtons = new();
     private string? _currentPage = null;
+
+    // مرجع لآخر InvoiceUserControl مُنشَأ (لتفعيل الفتح البرمجي من الأرشيف/لوحة التحكم)
+    private InvoiceUserControl? _currentInvoiceControl;
 
     public MainForm()
     {
@@ -189,7 +191,6 @@ public class MainForm : Form
         _sidePanel.Controls.Add(btn);
     }
 
-    /// <summary>يُحدّث معلومات المستخدم + يُخفي الأزرار التي لا يملك صلاحيتها.</summary>
     private void UpdateUserInfo()
     {
         var user = ApiClient.Instance.CurrentUser;
@@ -256,8 +257,8 @@ public class MainForm : Form
             "Dashboard" => new DashboardUserControl(),
             "Suppliers" => new SuppliersUserControl(),
             "Products" => new ProductsUserControl(),
-            "Invoice" => new InvoiceUserControl(),
-            "Archive" => new ArchiveUserControl(),
+            "Invoice" => CreateInvoicePage(),
+            "Archive" => CreateArchivePage(),
             _ => BuildPlaceholder($"صفحة «{_lblPageTitle.Text}» قيد الإنشاء.\nستُضاف في الخطوات القادمة.")
         };
 
@@ -270,6 +271,28 @@ public class MainForm : Form
         host.ResumeLayout();
 
         SetStatus($"الصفحة الحالية: {_lblPageTitle.Text}");
+    }
+
+    /// <summary>ينشئ صفحة الفاتورة ويحفظ مرجعًا لها (للتفعيل البرمجي).</summary>
+    private Control CreateInvoicePage()
+    {
+        _currentInvoiceControl = new InvoiceUserControl();
+        return _currentInvoiceControl;
+    }
+
+    /// <summary>ينشئ صفحة الأرشيف ويشترك في حدث فتح فاتورة.</summary>
+    private Control CreateArchivePage()
+    {
+        var archive = new ArchiveUserControl();
+        archive.InvoiceOpenRequested += OnInvoiceOpenRequested;
+        return archive;
+    }
+
+    /// <summary>عند النقر المزدوج على فاتورة في الأرشيف: انتقل لشاشة الفاتورة وافتحها.</summary>
+    private void OnInvoiceOpenRequested(long id)
+    {
+        Navigate("Invoice");
+        _currentInvoiceControl?.RequestOpenInvoice(id);
     }
 
     private static Control BuildPlaceholder(string text)
