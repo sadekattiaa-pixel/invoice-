@@ -1,6 +1,7 @@
 using Invoice.Api.Security;
 using Invoice.Domain.Entities;
 using Invoice.Infrastructure.Persistence;
+using Invoice.Infrastructure.Storage;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -11,11 +12,14 @@ namespace Invoice.Api.Controllers;
 /// نقاط نهاية API للأصناف — CRUD كامل مع قواعد العمل.
 /// كل نقطة تتطلب صلاحية من نوع products.*
 ///
-/// قواعد موحّدة لكل التصنيفات (بند 14):
+/// قواعد موحّدة لكل التصنيفات:
 ///   - الكود إلزامي دائمًا.
 ///   - الاسم = الكود تلقائيًا.
 ///   - Batteries: لها حقول إضافية (Ah, L, W, H, Oh, Layout, Pallet, صورة)، والـ Pattern = null.
 ///   - Car/Truck Tires: لها حقل Pattern إلزامي، وباقي الحقول الإضافية = null.
+///
+/// الصور: تُخزَّن على الخادم في مجلد ProductImageStorage.Folder،
+/// ويُخزَّن المسار الكامل في Product.LayoutImageFilename.
 /// </summary>
 [ApiController]
 [Route("api/products")]
@@ -100,30 +104,25 @@ public class ProductsController : ControllerBase
             return BadRequest(new { message = "المورد غير موجود." });
         }
 
-        // الكود إلزامي في كل التصنيفات (بند 14)
         if (string.IsNullOrWhiteSpace(product.Code))
         {
             return BadRequest(new { message = "كود الصنف مطلوب." });
         }
 
-        // الاسم = الكود تلقائيًا في كل التصنيفات
         product.Code = product.Code.Trim();
         product.Name = product.Code;
 
         if (product.Category == "Batteries")
         {
-            // البطارية: لا نقشة
             product.Pattern = null;
         }
         else
         {
-            // الإطارات: النقشة إلزامية
             if (string.IsNullOrWhiteSpace(product.Pattern))
             {
                 return BadRequest(new { message = "نقشة الإطار مطلوبة." });
             }
 
-            // تنظيف الحقول الإضافية غير المتعلقة بالإطارات
             product.Ah = null;
             product.L = null;
             product.W = null;
@@ -134,7 +133,9 @@ public class ProductsController : ControllerBase
             product.Pallet = null;
         }
 
-        // التحقق من عدم تكرار الكود
+        // عند الإنشاء: نُصفّر مسار الصورة دائمًا — الصورة تُرفع بعد الإنشاء عبر POST /image
+        product.LayoutImageFilename = null;
+
         var codeExists = await _db.Products.AnyAsync(p => p.Code == product.Code);
         if (codeExists)
         {
@@ -177,13 +178,11 @@ public class ProductsController : ControllerBase
             return BadRequest(new { message = "المورد غير موجود." });
         }
 
-        // الكود إلزامي في كل التصنيفات (بند 14)
         if (string.IsNullOrWhiteSpace(product.Code))
         {
             return BadRequest(new { message = "كود الصنف مطلوب." });
         }
 
-        // الاسم = الكود تلقائيًا
         product.Code = product.Code.Trim();
         product.Name = product.Code;
 
@@ -208,7 +207,6 @@ public class ProductsController : ControllerBase
             product.Pallet = null;
         }
 
-        // التحقق من عدم تكرار الكود (باستثناء الصنف نفسه)
         var codeTaken = await _db.Products.AnyAsync(p => p.Code == product.Code && p.Id != id);
         if (codeTaken)
         {
@@ -225,7 +223,11 @@ public class ProductsController : ControllerBase
         existing.H = product.H;
         existing.Oh = product.Oh;
         existing.Layout = product.Layout;
-        existing.LayoutImageFilename = product.LayoutImageFilename;
+
+        // لا نُعدّل مسار الصورة من خلال PUT — الصورة تُدار فقط عبر POST/DELETE /image
+        // (إن أرسل Desktop مسارًا غير فارغ وكان فارغًا حاليًا، نُبقيه كما هو)
+        // → لا نلمس existing.LayoutImageFilename هنا.
+
         existing.Pallet = product.Pallet;
         existing.SupplierId = product.SupplierId;
         existing.UpdatedAt = DateTime.UtcNow;
@@ -260,7 +262,101 @@ public class ProductsController : ControllerBase
             return BadRequest(new { message = $"لا يمكن حذف الصنف: مستخدم في {count} بند فاتورة." });
         }
 
+        // حذف ملف الصورة من القرص (إن وُجد)
+        ProductImageStorage.Delete(product.LayoutImageFilename);
+
         _db.Products.Remove(product);
+        await _db.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    // ============================================================
+    // صورة الصنف
+    // ============================================================
+
+    /// <summary>
+    /// رفع صورة الصنف (multipart/form-data، حقل اسمه "file").
+    /// يَحفظ الصورة على الخادم ويُحدّث Product.LayoutImageFilename بالمسار الكامل.
+    /// يستبدل الصورة القديمة إن وُجدت.
+    /// </summary>
+    [HttpPost("{id:int}/image")]
+    [Authorize(Policy = Permissions.ProductsUpdate)]
+    [RequestSizeLimit(5 * 1024 * 1024)] // 5 MB
+    public async Task<IActionResult> UploadImage(int id, IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { message = "لم يتم إرسال ملف." });
+
+        var extension = Path.GetExtension(file.FileName);
+        if (!ProductImageStorage.IsAllowedExtension(extension))
+            return BadRequest(new { message = "امتداد غير مدعوم. المسموح: png, jpg, jpeg, gif, bmp, webp." });
+
+        var product = await _db.Products.FindAsync(id);
+        if (product == null)
+            return NotFound(new { message = "الصنف غير موجود." });
+
+        // احذف القديمة
+        ProductImageStorage.Delete(product.LayoutImageFilename);
+
+        // احفظ الجديدة
+        string savedPath;
+        await using (var stream = file.OpenReadStream())
+        {
+            savedPath = await ProductImageStorage.SaveAsync(stream, extension);
+        }
+
+        product.LayoutImageFilename = savedPath;
+        product.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "تم رفع الصورة بنجاح.",
+            path = savedPath
+        });
+    }
+
+    /// <summary>جلب صورة الصنف الحالية (صورة).</summary>
+    [HttpGet("{id:int}/image")]
+    [Authorize(Policy = Permissions.ProductsRead)]
+    public async Task<IActionResult> GetImage(int id)
+    {
+        var product = await _db.Products
+            .AsNoTracking()
+            .Where(p => p.Id == id)
+            .Select(p => new { p.LayoutImageFilename })
+            .FirstOrDefaultAsync();
+
+        if (product == null)
+            return NotFound(new { message = "الصنف غير موجود." });
+
+        if (string.IsNullOrWhiteSpace(product.LayoutImageFilename))
+            return NotFound(new { message = "لا توجد صورة لهذا الصنف." });
+
+        var bytes = await ProductImageStorage.ReadBytesAsync(product.LayoutImageFilename);
+        if (bytes == null || bytes.Length == 0)
+            return NotFound(new { message = "ملف الصورة غير موجود على الخادم." });
+
+        var contentType = ProductImageStorage.GetContentType(product.LayoutImageFilename);
+        return File(bytes, contentType);
+    }
+
+    /// <summary>حذف صورة الصنف (من القرص ومن قاعدة البيانات).</summary>
+    [HttpDelete("{id:int}/image")]
+    [Authorize(Policy = Permissions.ProductsUpdate)]
+    public async Task<IActionResult> DeleteImage(int id)
+    {
+        var product = await _db.Products.FindAsync(id);
+        if (product == null)
+            return NotFound(new { message = "الصنف غير موجود." });
+
+        if (string.IsNullOrWhiteSpace(product.LayoutImageFilename))
+            return NoContent(); // لا شيء لحذفه
+
+        ProductImageStorage.Delete(product.LayoutImageFilename);
+        product.LayoutImageFilename = null;
+        product.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
         return NoContent();
