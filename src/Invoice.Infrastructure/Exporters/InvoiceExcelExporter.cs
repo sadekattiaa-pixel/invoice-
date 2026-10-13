@@ -1,5 +1,6 @@
 using ClosedXML.Excel;
 using Invoice.Application.Dtos;
+using Invoice.Infrastructure.Storage;
 using InvoiceEntity = Invoice.Domain.Entities.Invoice;
 using InvoiceItemEntity = Invoice.Domain.Entities.InvoiceItem;
 
@@ -11,6 +12,7 @@ namespace Invoice.Infrastructure.Exporters;
 /// ورقة "الملخص": المدفوعات + الخصومات + المصاريف + الملخص
 ///
 /// يدعم إخفاء أجزاء كاملة عبر المعامل hidden (مفاتيح InvoicePdfExporter.Keys).
+/// يدعم عرض صور الأصناف من مسارها على الخادم (في ورقة "الفاتورة").
 /// </summary>
 public static class InvoiceExcelExporter
 {
@@ -28,12 +30,10 @@ public static class InvoiceExcelExporter
 
         using var workbook = new XLWorkbook();
 
-        // ================= الورقة 1: الفاتورة =================
         var ws1 = workbook.Worksheets.Add("الفاتورة");
         ws1.RightToLeft = true;
         BuildInvoiceSheet(ws1, invoice, company, IsHidden);
 
-        // ================= الورقة 2: الملخص =================
         var ws2 = workbook.Worksheets.Add("الملخص");
         ws2.RightToLeft = true;
         BuildSummarySheet(ws2, invoice, IsHidden);
@@ -50,45 +50,53 @@ public static class InvoiceExcelExporter
         CompanyInfoDto company,
         Func<string, bool> IsHidden)
     {
-        // ============ حساب أعمدة جدول الأصناف (21 عمودًا) ============
+        // ============ أعمدة جدول الأصناف (21 عمودًا) ============
         var allCols = new List<ItemColumn>
         {
-            new(InvoicePdfExporter.Keys.ItemsLineNo,           "#",                0.5,  item => item.LineNo,                        null,          true),
-            new(InvoicePdfExporter.Keys.ItemsCode,             "الكود",            1.8,  item => item.Product?.Code ?? "—",          null,          false),
-            new(InvoicePdfExporter.Keys.ItemsAh,               "AH",               0.7,  item => (object?)item.Product?.Ah,          "#,##0.##",    false),
-            new(InvoicePdfExporter.Keys.ItemsL,                "L",                0.6,  item => (object?)item.Product?.L,           "#,##0.##",    false),
-            new(InvoicePdfExporter.Keys.ItemsW,                "W",                0.6,  item => (object?)item.Product?.W,           "#,##0.##",    false),
-            new(InvoicePdfExporter.Keys.ItemsH,                "H",                0.6,  item => (object?)item.Product?.H,           "#,##0.##",    false),
-            new(InvoicePdfExporter.Keys.ItemsOh,               "OH",               0.7,  item => (object?)item.Product?.Oh,          "#,##0.##",    false),
-            new(InvoicePdfExporter.Keys.ItemsLayout,           "LAYOUT",           0.9,  item => (object?)item.Product?.Layout,      null,          false),
-            new(InvoicePdfExporter.Keys.ItemsImage,            "الصورة",           0.8,  _ => "",                                    null,          false),
-            new(InvoicePdfExporter.Keys.ItemsPallet,           "PALLET",           0.8,  item => (object?)item.Product?.Pallet,      null,          false),
-            new(InvoicePdfExporter.Keys.ItemsCategory,         "التصنيف",          1.2,  item => item.Product?.Category ?? "",       null,          false),
-            new(InvoicePdfExporter.Keys.ItemsPattern,          "النقشة",           1.3,  item => item.Product?.Pattern ?? "",        null,          false),
-            new(InvoicePdfExporter.Keys.ItemsQuantity,         "الكمية",           1.0,  item => item.Quantity,                      "#,##0.##",    false),
-            new(InvoicePdfExporter.Keys.ItemsPurchaseUsd,      "الشراء $",         1.3,  item => item.PurchaseUsd,                   "#,##0.00",    false),
-            new(InvoicePdfExporter.Keys.ItemsTotalPurchaseUsd, "اجمالي الشراء $",  1.6,  item => item.Quantity * item.PurchaseUsd,   "#,##0.00",    false),
-            new(InvoicePdfExporter.Keys.ItemsPurchaseDzd,      "التكلفة",          1.4,  item => item.PurchaseDzd,                   "#,##0.00",    false),
-            new(InvoicePdfExporter.Keys.ItemsTotalDzd,         "اجمالي التكلفة",   1.6,  item => item.TotalDzd,                      "#,##0.00",    false),
-            new(InvoicePdfExporter.Keys.ItemsSaleDzd,          "البيع",            1.4,  item => item.SaleDzd,                       "#,##0.00",    false),
-            new(InvoicePdfExporter.Keys.ItemsTotalSale,        "اجمالي البيع",     1.6,  item => item.TotalSale,                     "#,##0.00",    false),
-            new(InvoicePdfExporter.Keys.ItemsUnitProfit,       "الربح",            1.4,  item => item.UnitProfit,                    "#,##0.00",    false),
-            new(InvoicePdfExporter.Keys.ItemsTotalProfit,      "اجمالي الربح",     1.6,  item => item.TotalProfit,                   "#,##0.00",    false),
+            new(InvoicePdfExporter.Keys.ItemsLineNo,           "#",                5,   item => item.LineNo,                        null,          IsImage: false),
+            new(InvoicePdfExporter.Keys.ItemsCode,             "الكود",            18,  item => item.Product?.Code ?? "—",          null,          IsImage: false),
+            new(InvoicePdfExporter.Keys.ItemsAh,               "AH",               7,   item => (object?)item.Product?.Ah,          "#,##0.##",    IsImage: false),
+            new(InvoicePdfExporter.Keys.ItemsL,                "L",                6,   item => (object?)item.Product?.L,           "#,##0.##",    IsImage: false),
+            new(InvoicePdfExporter.Keys.ItemsW,                "W",                6,   item => (object?)item.Product?.W,           "#,##0.##",    IsImage: false),
+            new(InvoicePdfExporter.Keys.ItemsH,                "H",                6,   item => (object?)item.Product?.H,           "#,##0.##",    IsImage: false),
+            new(InvoicePdfExporter.Keys.ItemsOh,               "OH",               7,   item => (object?)item.Product?.Oh,          "#,##0.##",    IsImage: false),
+            new(InvoicePdfExporter.Keys.ItemsLayout,           "LAYOUT",           9,   item => (object?)item.Product?.Layout,      null,          IsImage: false),
+            new(InvoicePdfExporter.Keys.ItemsImage,            "الصورة",           18,  _ => "",                                    null,          IsImage: true),
+            new(InvoicePdfExporter.Keys.ItemsPallet,           "PALLET",           8,   item => (object?)item.Product?.Pallet,      null,          IsImage: false),
+            new(InvoicePdfExporter.Keys.ItemsCategory,         "التصنيف",          12,  item => item.Product?.Category ?? "",       null,          IsImage: false),
+            new(InvoicePdfExporter.Keys.ItemsPattern,          "النقشة",           13,  item => item.Product?.Pattern ?? "",        null,          IsImage: false),
+            new(InvoicePdfExporter.Keys.ItemsQuantity,         "الكمية",           10,  item => item.Quantity,                      "#,##0.##",    IsImage: false),
+            new(InvoicePdfExporter.Keys.ItemsPurchaseUsd,      "الشراء $",         13,  item => item.PurchaseUsd,                   "#,##0.00",    IsImage: false),
+            new(InvoicePdfExporter.Keys.ItemsTotalPurchaseUsd, "اجمالي الشراء $",  16,  item => item.Quantity * item.PurchaseUsd,   "#,##0.00",    IsImage: false),
+            new(InvoicePdfExporter.Keys.ItemsPurchaseDzd,      "التكلفة",          14,  item => item.PurchaseDzd,                   "#,##0.00",    IsImage: false),
+            new(InvoicePdfExporter.Keys.ItemsTotalDzd,         "اجمالي التكلفة",   16,  item => item.TotalDzd,                      "#,##0.00",    IsImage: false),
+            new(InvoicePdfExporter.Keys.ItemsSaleDzd,          "البيع",            14,  item => item.SaleDzd,                       "#,##0.00",    IsImage: false),
+            new(InvoicePdfExporter.Keys.ItemsTotalSale,        "اجمالي البيع",     16,  item => item.TotalSale,                     "#,##0.00",    IsImage: false),
+            new(InvoicePdfExporter.Keys.ItemsUnitProfit,       "الربح",            14,  item => item.UnitProfit,                    "#,##0.00",    IsImage: false),
+            new(InvoicePdfExporter.Keys.ItemsTotalProfit,      "اجمالي الربح",     16,  item => item.TotalProfit,                   "#,##0.00",    IsImage: false),
         };
         var visibleCols = allCols.Where(c => !IsHidden(c.Key)).ToList();
 
-        // LastCol = عدد الأعمدة الظاهرة أو 7 (الحد الأدنى للعناوين)
+        // LastCol = عدد الأعمدة الظاهرة أو 7
         int lastCol = Math.Max(visibleCols.Count, 7);
+
+        // ============ تحميل صور الأصناف مسبقًا ============
+        var imageCache = new Dictionary<int, byte[]?>();
+        foreach (var item in invoice.Items)
+        {
+            var pid = item.ProductId;
+            if (imageCache.ContainsKey(pid)) continue;
+
+            var path = item.Product?.LayoutImageFilename;
+            imageCache[pid] = string.IsNullOrWhiteSpace(path)
+                ? null
+                : ProductImageStorage.ReadBytesAsync(path).GetAwaiter().GetResult();
+        }
 
         int row = 1;
         var supplier = invoice.Supplier;
 
-        for (int c = 1; c <= lastCol; c++)
-            ws.Column(c).Width = 14;
-
-        // ====================================================
-        // ========== 1) الشركة (يمين) + الشعار (يسار) ==========
-        // ====================================================
+        // ============ الشركة (يمين) + الشعار (يسار) ============
         if (!IsHidden(InvoicePdfExporter.Keys.CompanyInfo))
         {
             void CompanyLine(string? value, bool bold = false, int fontSize = 11)
@@ -127,9 +135,7 @@ public static class InvoiceExcelExporter
         while (row < logoRows) row++;
         row++;
 
-        // ====================================================
-        // ========== 2) الفاتورة (يمين) + المورد (يسار) ==========
-        // ====================================================
+        // ============ الفاتورة (يمين) + المورد (يسار) ============
         var invoiceLines = new List<string?>();
         if (!IsHidden(InvoicePdfExporter.Keys.InvoiceInfo))
         {
@@ -173,11 +179,10 @@ public static class InvoiceExcelExporter
 
         row++;
 
-        // ====================================================
-        // ========== 3) جدول الأصناف ==========
-        // ====================================================
+        // ============ جدول الأصناف ============
         if (visibleCols.Count > 0 && invoice.Items.Any())
         {
+            // عنوان
             var titleR = ws.Range(row, 1, row, lastCol);
             titleR.Merge();
             titleR.Value = "جدول الأصناف";
@@ -186,6 +191,7 @@ public static class InvoiceExcelExporter
             titleR.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Right;
             row++;
 
+            // رؤوس الأعمدة
             int tableStartRow = row;
             for (int i = 0; i < visibleCols.Count; i++)
             {
@@ -197,34 +203,70 @@ public static class InvoiceExcelExporter
                 cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
                 cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
                 cell.Style.Border.OutsideBorderColor = XLColor.Black;
+
+                // ضبط عرض العمود
+                ws.Column(i + 1).Width = visibleCols[i].Width;
             }
             row++;
 
+            // بيانات
             foreach (var item in invoice.Items.OrderBy(i => i.LineNo))
             {
                 for (int i = 0; i < visibleCols.Count; i++)
                 {
                     var col = visibleCols[i];
                     var cell = ws.Cell(row, i + 1);
-                    var val = col.Get(item);
 
-                    if (val is null)
+                    if (col.IsImage)
+                    {
+                        // عمود الصورة: نضع علامة فارغة، ونضيف الصورة فوق الخلية بعد قليل
                         cell.Value = "";
-                    else if (val is decimal d)
-                        cell.Value = d;
-                    else if (val is int intVal)
-                        cell.Value = intVal;
+                    }
                     else
-                        cell.Value = val.ToString() ?? "";
+                    {
+                        var val = col.Get(item);
+                        if (val is null) cell.Value = "";
+                        else if (val is decimal d) cell.Value = d;
+                        else if (val is int intVal) cell.Value = intVal;
+                        else if (val is double dbl) cell.Value = dbl;
+                        else cell.Value = val.ToString() ?? "";
 
-                    if (!string.IsNullOrEmpty(col.Format))
-                        cell.Style.NumberFormat.Format = col.Format;
+                        if (!string.IsNullOrEmpty(col.Format))
+                            cell.Style.NumberFormat.Format = col.Format;
+                    }
 
                     cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
                     cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
                     cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
                     cell.Style.Border.OutsideBorderColor = XLColor.Black;
                 }
+
+                // ضبط ارتفاع الصف ليتّسع للصورة
+                bool hasImage = visibleCols.Any(c => c.IsImage);
+                ws.Row(row).Height = hasImage ? 60 : 22;
+
+                // إضافة الصور (إن وُجدت)
+                for (int i = 0; i < visibleCols.Count; i++)
+                {
+                    if (!visibleCols[i].IsImage) continue;
+
+                    var bytes = imageCache.GetValueOrDefault(item.ProductId);
+                    if (bytes == null || bytes.Length == 0) continue;
+
+                    try
+                    {
+                        using var ms = new MemoryStream(bytes);
+                        var pic = ws.AddPicture(ms)
+                            .MoveTo(ws.Cell(row, i + 1))
+                            .WithSize(70, 50);
+                        pic.Name = $"ProductImage_{item.LineNo}";
+                    }
+                    catch
+                    {
+                        // نتجاهل — الصورة التالفة لا تُعطّل التصدير
+                    }
+                }
+
                 row++;
             }
 
@@ -241,9 +283,7 @@ public static class InvoiceExcelExporter
             row++;
         }
 
-        // ====================================================
-        // ========== 4) ملاحظات ==========
-        // ====================================================
+        // ============ الملاحظات ============
         if (!IsHidden(InvoicePdfExporter.Keys.Notes) && !string.IsNullOrWhiteSpace(invoice.Notes))
         {
             var t = ws.Range(row, 1, row, lastCol);
@@ -336,7 +376,7 @@ public static class InvoiceExcelExporter
             row++;
         }
 
-        // ========== 1) المدفوعات ==========
+        // المدفوعات
         if (!IsHidden(InvoicePdfExporter.Keys.Payments))
         {
             var payments = invoice.Payments.OrderBy(p => p.LineNo).ToList();
@@ -350,7 +390,7 @@ public static class InvoiceExcelExporter
             }
         }
 
-        // ========== 2) الخصومات ==========
+        // الخصومات
         if (!IsHidden(InvoicePdfExporter.Keys.Discounts))
         {
             var discounts = invoice.Discounts.OrderBy(d => d.LineNo).ToList();
@@ -364,7 +404,7 @@ public static class InvoiceExcelExporter
             }
         }
 
-        // ========== 3) المصاريف ==========
+        // المصاريف
         if (!IsHidden(InvoicePdfExporter.Keys.Expenses))
         {
             var expenses = invoice.Expenses.OrderBy(e => e.LineNo).ToList();
@@ -378,7 +418,7 @@ public static class InvoiceExcelExporter
             }
         }
 
-        // ========== 4) الملخص ==========
+        // الملخص
         if (!IsHidden(InvoicePdfExporter.Keys.Summary))
         {
             SectionTitle("الملخص");
@@ -403,5 +443,5 @@ public static class InvoiceExcelExporter
         double Width,
         Func<InvoiceItemEntity, object?> Get,
         string? Format,
-        bool IsConstant);
+        bool IsImage);
 }

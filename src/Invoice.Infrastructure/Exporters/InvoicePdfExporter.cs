@@ -1,4 +1,5 @@
 using Invoice.Application.Dtos;
+using Invoice.Infrastructure.Storage;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -13,6 +14,7 @@ namespace Invoice.Infrastructure.Exporters;
 /// صفحة 2: المدفوعات + الخصومات + المصاريف + الملخص
 ///
 /// يدعم إخفاء أجزاء كاملة عبر المعامل hidden (مفاتيح في Keys).
+/// يدعم عرض صور الأصناف من مسارها على الخادم.
 /// </summary>
 public static class InvoicePdfExporter
 {
@@ -68,7 +70,6 @@ public static class InvoicePdfExporter
     /// <summary>
     /// يُنشئ ملف PDF للفاتورة في المسار المحدد.
     /// </summary>
-    /// <param name="hidden">مجموعة مفاتيح العناصر المخفية (اختياري).</param>
     public static void Export(
         InvoiceEntity invoice,
         CompanyInfoDto company,
@@ -87,7 +88,25 @@ public static class InvoicePdfExporter
         var expenses = invoice.Expenses.OrderBy(e => e.LineNo).ToList();
         var supplier = invoice.Supplier;
 
-        // ============ أعمدة جدول الأصناف (21 عمودًا — بالترتيب المطلوب) ============
+        // ============ تحميل صور الأصناف من القرص مسبقًا ============
+        var imageCache = new Dictionary<int, byte[]?>();
+        foreach (var item in items)
+        {
+            var pid = item.ProductId;
+            if (imageCache.ContainsKey(pid)) continue;
+
+            var path = item.Product?.LayoutImageFilename;
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                imageCache[pid] = null;
+                continue;
+            }
+
+            var bytes = ProductImageStorage.ReadBytesAsync(path).GetAwaiter().GetResult();
+            imageCache[pid] = bytes;
+        }
+
+        // ============ أعمدة جدول الأصناف (21 عمودًا) ============
         var allItemColumns = new List<ItemColumn>
         {
             new(Keys.ItemsLineNo,           "#",                0.5f, item => item.LineNo.ToString()),
@@ -98,8 +117,7 @@ public static class InvoicePdfExporter
             new(Keys.ItemsH,                "H",                0.6f, item => item.Product?.H?.ToString("0.##") ?? ""),
             new(Keys.ItemsOh,               "OH",               0.7f, item => item.Product?.Oh?.ToString("0.##") ?? ""),
             new(Keys.ItemsLayout,           "LAYOUT",           0.9f, item => item.Product?.Layout?.ToString() ?? ""),
-            // عمود الصورة: الخادم لا يستطيع الوصول لملفات الصور المحلية — يُعرض فارغًا حاليًا
-            new(Keys.ItemsImage,            "الصورة",           0.8f, _ => ""),
+            new(Keys.ItemsImage,            "الصورة",           0.9f, _ => "",      item => imageCache.GetValueOrDefault(item.ProductId)),
             new(Keys.ItemsPallet,           "PALLET",           0.8f, item => item.Product?.Pallet?.ToString() ?? ""),
             new(Keys.ItemsCategory,         "التصنيف",          1.2f, item => item.Product?.Category ?? ""),
             new(Keys.ItemsPattern,          "النقشة",           1.3f, item => item.Product?.Pattern ?? ""),
@@ -118,7 +136,6 @@ public static class InvoicePdfExporter
             .Where(c => !IsHidden(c.Key))
             .ToList();
 
-        // هل نحتاج الصفحة 2؟
         bool needPage2 =
             (!IsHidden(Keys.Payments)  && payments.Any())  ||
             (!IsHidden(Keys.Discounts) && discounts.Any()) ||
@@ -129,7 +146,7 @@ public static class InvoicePdfExporter
         {
             container.Page(page =>
             {
-                page.Size(PageSizes.A4.Landscape());  // أفقي — لأن الجدول صار 21 عمودًا
+                page.Size(PageSizes.A4.Landscape());
                 page.Margin(1f, Unit.Centimetre);
                 page.DefaultTextStyle(x => x.FontSize(9).FontFamily("Arial"));
 
@@ -251,12 +268,27 @@ public static class InvoicePdfExporter
 
                             foreach (var item in items)
                             {
-                                void C(string text) =>
-                                    table.Cell().Border(0.5f).BorderColor(Colors.Black)
-                                        .Padding(3).AlignCenter().Text(text).FontSize(8);
-
                                 foreach (var c in visibleItemColumns)
-                                    C(c.Value(item));
+                                {
+                                    var cell = table.Cell()
+                                        .Border(0.5f).BorderColor(Colors.Black)
+                                        .Padding(2)
+                                        .AlignCenter();
+
+                                    // ===== عمود الصورة =====
+                                    if (c.ImageBytes != null)
+                                    {
+                                        var bytes = c.ImageBytes(item);
+                                        if (bytes != null && bytes.Length > 0)
+                                            cell.Height(40).Image(bytes).FitArea();
+                                        else
+                                            cell.Text("").FontSize(8);
+                                    }
+                                    else
+                                    {
+                                        cell.Padding(3).Text(c.Value(item)).FontSize(8);
+                                    }
+                                }
                             }
                         });
                     }
@@ -395,7 +427,6 @@ public static class InvoicePdfExporter
                     }
                 });
 
-                // ============ Footer: أرقام الصفحات ============
                 page.Footer().AlignCenter().Text(text =>
                 {
                     text.CurrentPageNumber();
@@ -413,5 +444,6 @@ public static class InvoicePdfExporter
         string Key,
         string Header,
         float Weight,
-        Func<InvoiceItemEntity, string> Value);
+        Func<InvoiceItemEntity, string> Value,
+        Func<InvoiceItemEntity, byte[]?>? ImageBytes = null);
 }
