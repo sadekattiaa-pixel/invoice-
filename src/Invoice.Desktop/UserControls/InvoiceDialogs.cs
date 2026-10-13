@@ -158,6 +158,13 @@ public class ProductPickerDialog : Form
 
         AcceptButton = _btnOk;
         CancelButton = _btnCancel;
+
+        // ============ التركيز على مربع البحث عند الفتح (بند 10) ============
+        Shown += (_, _) =>
+        {
+            _txtSearch.Focus();
+            _txtSearch.SelectAll();
+        };
     }
 
     private void ApplyFilter()
@@ -203,8 +210,17 @@ public class ProductPickerDialog : Form
         public string Name { get; set; } = "";
         public string Category { get; set; } = "";
         public string? Pattern { get; set; }
-        public decimal? Ah { get; set; }
         public string? SupplierName { get; set; }
+
+        // حقول إضافية (للعرض في جدول البنود)
+        public decimal? Ah { get; set; }
+        public decimal? L { get; set; }
+        public decimal? W { get; set; }
+        public decimal? H { get; set; }
+        public decimal? Oh { get; set; }
+        public int? Layout { get; set; }
+        public string? LayoutImageFilename { get; set; }
+        public int? Pallet { get; set; }
     }
 }
 

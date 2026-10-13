@@ -95,7 +95,6 @@ public class InvoiceUserControl : UserControl
             Font = new Font("Segoe UI", 9F)
         };
 
-        // ترتيب الإضافة مهم: Fill أولاً، ثم Bottom، ثم Top
         Controls.Add(tabs);
         Controls.Add(summary);
         Controls.Add(_lblStatus);
@@ -176,8 +175,8 @@ public class InvoiceUserControl : UserControl
             BackColor = Color.White,
             Padding = new Padding(0)
         };
-        tabSupplier.Controls.Add(BuildNotesTab());   // Fill أولاً
-        tabSupplier.Controls.Add(BuildHeader());     // Top آخراً (الأعلى)
+        tabSupplier.Controls.Add(BuildNotesTab());
+        tabSupplier.Controls.Add(BuildHeader());
 
         // ============ تبويب 2: الأصناف ============
         var tabItems = new TabPage("الأصناف")
@@ -204,20 +203,35 @@ public class InvoiceUserControl : UserControl
         return tabs;
     }
 
-    /// <summary>تبويب المدفوعات/الخصومات/المصاريف — 3 لوحات متساوية رأسياً.</summary>
+    /// <summary>
+    /// تبويب المدفوعات/الخصومات/المصاريف (بند 3):
+    ///   يمين الشاشة: المصاريف (كامل الارتفاع).
+    ///   يسار الشاشة: المدفوعات (أعلى) + الخصومات (أسفل).
+    /// </summary>
     private Control BuildAmountsTab()
     {
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 3,
+            ColumnCount = 2,
+            RowCount = 1,
             BackColor = Color.White,
             Padding = new Padding(0)
         };
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33f));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33f));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 33.34f));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f)); // يسار
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f)); // يمين
+
+        // ---------- العمود الأيسر: المدفوعات (أعلى) + الخصومات (أسفل) ----------
+        var leftSide = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            BackColor = Color.White,
+            Padding = new Padding(0)
+        };
+        leftSide.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
+        leftSide.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
 
         _paymentsPanel = new InvoiceAmountsPanel { Dock = DockStyle.Fill, Title = "المدفوعات" };
         _paymentsPanel.Changed += () => _lastCalculation = null;
@@ -225,12 +239,15 @@ public class InvoiceUserControl : UserControl
         _discountsPanel = new InvoiceAmountsPanel { Dock = DockStyle.Fill, Title = "الخصومات" };
         _discountsPanel.Changed += () => _lastCalculation = null;
 
+        leftSide.Controls.Add(_paymentsPanel, 0, 0);
+        leftSide.Controls.Add(_discountsPanel, 0, 1);
+
+        // ---------- العمود الأيمن: المصاريف (كامل الارتفاع) ----------
         _expensesPanel = new InvoiceAmountsPanel { Dock = DockStyle.Fill, Title = "المصاريف" };
         _expensesPanel.Changed += () => _lastCalculation = null;
 
-        layout.Controls.Add(_paymentsPanel, 0, 0);
-        layout.Controls.Add(_discountsPanel, 0, 1);
-        layout.Controls.Add(_expensesPanel, 0, 2);
+        layout.Controls.Add(leftSide, 0, 0);        // يسار
+        layout.Controls.Add(_expensesPanel, 1, 0);  // يمين
 
         return layout;
     }
@@ -332,7 +349,6 @@ public class InvoiceUserControl : UserControl
         return panel;
     }
 
-    /// <summary>ملاحظات متعددة الأسطر تملأ باقي تبويب المورد.</summary>
     private Control BuildNotesTab()
     {
         var panel = new Panel
@@ -349,10 +365,10 @@ public class InvoiceUserControl : UserControl
             RowCount = 4,
             BackColor = Color.WhiteSmoke
         };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));   // عنوان 1
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));   // مربع 1
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));   // عنوان 2
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));   // مربع 2
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
 
         var lblN1 = new Label
         {
@@ -844,14 +860,10 @@ public class InvoiceUserControl : UserControl
             return;
         }
 
-        // 1) مفاتيح الأعمدة المخفية من جدول البنود (من نافذة "الأعمدة").
         var hidden = ColumnsDialog.GetHiddenKeys(GridKey);
-
-        // 2) نافذة خيارات التصدير — تُعيد مفاتيح الأقسام المُلغاة (أو null عند الإلغاء).
         var exportHidden = ExportOptionsDialog.ShowFor(this, hidden);
-        if (exportHidden == null) return; // المستخدم ألغى
+        if (exportHidden == null) return;
 
-        // 3) دمج القائمتين مع إزالة التكرار.
         var mergedHidden = hidden
             .Concat(exportHidden)
             .Distinct(StringComparer.OrdinalIgnoreCase)
