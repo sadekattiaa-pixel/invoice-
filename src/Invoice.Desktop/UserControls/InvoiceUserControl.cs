@@ -7,6 +7,10 @@ namespace Invoice.Desktop.UserControls;
 
 /// <summary>
 /// شاشة الفاتورة — إنشاء/تحرير/حفظ/أرشفة فاتورة + حساب معاينة + تصدير PDF/Excel.
+/// الشاشة مُقسَّمة إلى 3 تبويبات:
+///   1) بيانات المورد والملاحظات
+///   2) الأصناف
+///   3) المدفوعات والخصومات والمصاريف
 /// </summary>
 public class InvoiceUserControl : UserControl
 {
@@ -78,9 +82,7 @@ public class InvoiceUserControl : UserControl
         Padding = new Padding(8);
 
         var toolbar = BuildToolbar();
-        var header = BuildHeader();
-        var middle = BuildMiddle();
-        var notesPanel = BuildNotes();
+        var tabs = BuildTabs();
         var summary = BuildSummary();
 
         _lblStatus = new Label
@@ -93,11 +95,10 @@ public class InvoiceUserControl : UserControl
             Font = new Font("Segoe UI", 9F)
         };
 
-        Controls.Add(middle);
-        Controls.Add(notesPanel);
+        // ترتيب الإضافة مهم: Fill أولاً، ثم Bottom، ثم Top
+        Controls.Add(tabs);
         Controls.Add(summary);
         Controls.Add(_lblStatus);
-        Controls.Add(header);
         Controls.Add(toolbar);
     }
 
@@ -157,6 +158,81 @@ public class InvoiceUserControl : UserControl
         });
 
         return tb;
+    }
+
+    private TabControl BuildTabs()
+    {
+        var tabs = new TabControl
+        {
+            Dock = DockStyle.Fill,
+            RightToLeft = RightToLeft.Yes,
+            Font = new Font("Segoe UI", 10F),
+            Padding = new Point(22, 8)
+        };
+
+        // ============ تبويب 1: بيانات المورد والملاحظات ============
+        var tabSupplier = new TabPage("بيانات المورد والملاحظات")
+        {
+            BackColor = Color.White,
+            Padding = new Padding(0)
+        };
+        tabSupplier.Controls.Add(BuildNotesTab());   // Fill أولاً
+        tabSupplier.Controls.Add(BuildHeader());     // Top آخراً (الأعلى)
+
+        // ============ تبويب 2: الأصناف ============
+        var tabItems = new TabPage("الأصناف")
+        {
+            BackColor = Color.White,
+            Padding = new Padding(6)
+        };
+        _itemsPanel = new InvoiceItemsPanel { Dock = DockStyle.Fill };
+        _itemsPanel.Changed += () => _lastCalculation = null;
+        tabItems.Controls.Add(_itemsPanel);
+
+        // ============ تبويب 3: المدفوعات والخصومات والمصاريف ============
+        var tabAmounts = new TabPage("المدفوعات والخصومات والمصاريف")
+        {
+            BackColor = Color.White,
+            Padding = new Padding(6)
+        };
+        tabAmounts.Controls.Add(BuildAmountsTab());
+
+        tabs.TabPages.Add(tabSupplier);
+        tabs.TabPages.Add(tabItems);
+        tabs.TabPages.Add(tabAmounts);
+
+        return tabs;
+    }
+
+    /// <summary>تبويب المدفوعات/الخصومات/المصاريف — 3 لوحات متساوية رأسياً.</summary>
+    private Control BuildAmountsTab()
+    {
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 3,
+            BackColor = Color.White,
+            Padding = new Padding(0)
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33f));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33f));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 33.34f));
+
+        _paymentsPanel = new InvoiceAmountsPanel { Dock = DockStyle.Fill, Title = "المدفوعات" };
+        _paymentsPanel.Changed += () => _lastCalculation = null;
+
+        _discountsPanel = new InvoiceAmountsPanel { Dock = DockStyle.Fill, Title = "الخصومات" };
+        _discountsPanel.Changed += () => _lastCalculation = null;
+
+        _expensesPanel = new InvoiceAmountsPanel { Dock = DockStyle.Fill, Title = "المصاريف" };
+        _expensesPanel.Changed += () => _lastCalculation = null;
+
+        layout.Controls.Add(_paymentsPanel, 0, 0);
+        layout.Controls.Add(_discountsPanel, 0, 1);
+        layout.Controls.Add(_expensesPanel, 0, 2);
+
+        return layout;
     }
 
     private void OnChooseColumns()
@@ -256,85 +332,72 @@ public class InvoiceUserControl : UserControl
         return panel;
     }
 
-    private Panel BuildMiddle()
-    {
-        var middle = new Panel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.White
-        };
-
-        _itemsPanel = new InvoiceItemsPanel { Dock = DockStyle.Fill };
-        _itemsPanel.Changed += () => _lastCalculation = null;
-
-        var amountsContainer = new Panel
-        {
-            Dock = DockStyle.Left,
-            Width = 340,
-            BackColor = Color.White,
-            Padding = new Padding(5)
-        };
-
-        _paymentsPanel = new InvoiceAmountsPanel { Dock = DockStyle.Top, Height = 180, Title = "المدفوعات" };
-        _paymentsPanel.Changed += () => _lastCalculation = null;
-
-        _discountsPanel = new InvoiceAmountsPanel { Dock = DockStyle.Top, Height = 180, Title = "الخصومات" };
-        _discountsPanel.Changed += () => _lastCalculation = null;
-
-        _expensesPanel = new InvoiceAmountsPanel { Dock = DockStyle.Fill, Title = "المصاريف" };
-        _expensesPanel.Changed += () => _lastCalculation = null;
-
-        var spacer1 = new Panel { Dock = DockStyle.Top, Height = 6 };
-        var spacer2 = new Panel { Dock = DockStyle.Top, Height = 6 };
-
-        amountsContainer.Controls.Add(_expensesPanel);
-        amountsContainer.Controls.Add(spacer2);
-        amountsContainer.Controls.Add(_discountsPanel);
-        amountsContainer.Controls.Add(spacer1);
-        amountsContainer.Controls.Add(_paymentsPanel);
-
-        middle.Controls.Add(_itemsPanel);
-        middle.Controls.Add(amountsContainer);
-
-        return middle;
-    }
-
-    private Panel BuildNotes()
+    /// <summary>ملاحظات متعددة الأسطر تملأ باقي تبويب المورد.</summary>
+    private Control BuildNotesTab()
     {
         var panel = new Panel
         {
-            Dock = DockStyle.Bottom,
-            Height = 90,
+            Dock = DockStyle.Fill,
             BackColor = Color.WhiteSmoke,
-            Padding = new Padding(8)
+            Padding = new Padding(12)
         };
 
-        var lblN1 = new Label { Text = "ملاحظات 1:", AutoSize = true, Location = new Point(panel.Width - 80, 10), Anchor = AnchorStyles.Top | AnchorStyles.Right };
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 4,
+            BackColor = Color.WhiteSmoke
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));   // عنوان 1
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));   // مربع 1
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));   // عنوان 2
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));   // مربع 2
+
+        var lblN1 = new Label
+        {
+            Text = "ملاحظات 1:",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleRight,
+            Padding = new Padding(0, 0, 10, 0),
+            Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+            ForeColor = Color.FromArgb(30, 60, 120)
+        };
         _txtNotes = new TextBox
         {
-            Location = new Point(panel.Width - 600, 8),
-            Width = 510,
-            Height = 30,
-            Anchor = AnchorStyles.Top | AnchorStyles.Right
+            Dock = DockStyle.Fill,
+            Multiline = true,
+            ScrollBars = ScrollBars.Vertical,
+            AcceptsReturn = true,
+            Font = new Font("Segoe UI", 10F),
+            BackColor = Color.White
         };
 
-        var lblN2 = new Label { Text = "ملاحظات 2:", AutoSize = true, Location = new Point(panel.Width - 80, 48), Anchor = AnchorStyles.Top | AnchorStyles.Right };
+        var lblN2 = new Label
+        {
+            Text = "ملاحظات 2:",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleRight,
+            Padding = new Padding(0, 0, 10, 0),
+            Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+            ForeColor = Color.FromArgb(30, 60, 120)
+        };
         _txtNotes2 = new TextBox
         {
-            Location = new Point(panel.Width - 600, 46),
-            Width = 510,
-            Height = 30,
-            Anchor = AnchorStyles.Top | AnchorStyles.Right
+            Dock = DockStyle.Fill,
+            Multiline = true,
+            ScrollBars = ScrollBars.Vertical,
+            AcceptsReturn = true,
+            Font = new Font("Segoe UI", 10F),
+            BackColor = Color.White
         };
 
-        panel.Controls.AddRange(new Control[] { lblN1, _txtNotes, lblN2, _txtNotes2 });
-        panel.Resize += (_, _) =>
-        {
-            lblN1.Location = new Point(panel.Width - 80, 10);
-            _txtNotes.Location = new Point(panel.Width - 600, 8);
-            lblN2.Location = new Point(panel.Width - 80, 48);
-            _txtNotes2.Location = new Point(panel.Width - 600, 46);
-        };
+        layout.Controls.Add(lblN1, 0, 0);
+        layout.Controls.Add(_txtNotes, 0, 1);
+        layout.Controls.Add(lblN2, 0, 2);
+        layout.Controls.Add(_txtNotes2, 0, 3);
+
+        panel.Controls.Add(layout);
         return panel;
     }
 
