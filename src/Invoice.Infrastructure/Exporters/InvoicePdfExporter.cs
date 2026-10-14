@@ -97,7 +97,6 @@ public static class InvoicePdfExporter
         }
 
         // ============ أعمدة جدول الأصناف ============
-        // HeaderText مُختصر لأن الصفحة Portrait (عرض ضيق).
         var allItemColumns = new List<ItemColumn>
         {
             new(Keys.ItemsLineNo,           "#",           0.4f, item => item.LineNo.ToString()),
@@ -108,7 +107,7 @@ public static class InvoicePdfExporter
             new(Keys.ItemsH,                "H",           0.5f, item => item.Product?.H?.ToString("0.##") ?? ""),
             new(Keys.ItemsOh,               "OH",          0.6f, item => item.Product?.Oh?.ToString("0.##") ?? ""),
             new(Keys.ItemsLayout,           "LAYOUT",      0.8f, item => item.Product?.Layout?.ToString() ?? ""),
-            new(Keys.ItemsImage,            "صورة",        0.8f, _ => "",   item => imageCache.GetValueOrDefault(item.ProductId)),
+            new(Keys.ItemsImage,            "صورة",        0.5f, _ => "",   item => imageCache.GetValueOrDefault(item.ProductId)),
             new(Keys.ItemsPallet,           "PALLET",      0.7f, item => item.Product?.Pallet?.ToString() ?? ""),
             new(Keys.ItemsCategory,         "تصنيف",       1.0f, item => item.Product?.Category ?? ""),
             new(Keys.ItemsPattern,          "نقشة",        1.1f, item => item.Product?.Pattern ?? ""),
@@ -137,7 +136,7 @@ public static class InvoicePdfExporter
         {
             container.Page(page =>
             {
-                page.Size(PageSizes.A4);           // ← Portrait
+                page.Size(PageSizes.A4);
                 page.Margin(0.8f, Unit.Centimetre);
                 page.DefaultTextStyle(x => x.FontSize(8).FontFamily("Arial"));
 
@@ -147,7 +146,6 @@ public static class InvoicePdfExporter
                     // ========== الصفحة 1 ==========
                     // ============================================
 
-                    // ----- الشعار + بيانات الشركة -----
                     if (!IsHidden(Keys.Logo) || !IsHidden(Keys.CompanyInfo))
                     {
                         contentCol.Item().Row(row =>
@@ -189,7 +187,6 @@ public static class InvoicePdfExporter
                         });
                     }
 
-                    // ----- بيانات المورد + بيانات الفاتورة -----
                     if (!IsHidden(Keys.SupplierInfo) || !IsHidden(Keys.InvoiceInfo))
                     {
                         contentCol.Item().PaddingTop(12).Row(row =>
@@ -270,7 +267,7 @@ public static class InvoicePdfExporter
                                     {
                                         var bytes = c.ImageBytes(item);
                                         if (bytes != null && bytes.Length > 0)
-                                            cell.Height(30).Image(bytes).FitArea();
+                                            cell.Height(16).Image(bytes).FitArea();   // ← صورة صغيرة
                                         else
                                             cell.Text("").FontSize(7);
                                     }
@@ -283,7 +280,6 @@ public static class InvoicePdfExporter
                         });
                     }
 
-                    // ----- الملاحظات -----
                     if (!IsHidden(Keys.Notes) && !string.IsNullOrWhiteSpace(invoice.Notes))
                     {
                         contentCol.Item().PaddingTop(10).Text("ملاحظات").FontSize(10).Bold();

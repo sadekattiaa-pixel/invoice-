@@ -61,7 +61,7 @@ public static class InvoiceExcelExporter
             new(InvoicePdfExporter.Keys.ItemsH,                "H",                6,   item => (object?)item.Product?.H,           "#,##0.##",    IsImage: false),
             new(InvoicePdfExporter.Keys.ItemsOh,               "OH",               7,   item => (object?)item.Product?.Oh,          "#,##0.##",    IsImage: false),
             new(InvoicePdfExporter.Keys.ItemsLayout,           "LAYOUT",           9,   item => (object?)item.Product?.Layout,      null,          IsImage: false),
-            new(InvoicePdfExporter.Keys.ItemsImage,            "الصورة",           18,  _ => "",                                    null,          IsImage: true),
+            new(InvoicePdfExporter.Keys.ItemsImage,            "الصورة",           10,  _ => "",                                    null,          IsImage: true),
             new(InvoicePdfExporter.Keys.ItemsPallet,           "PALLET",           8,   item => (object?)item.Product?.Pallet,      null,          IsImage: false),
             new(InvoicePdfExporter.Keys.ItemsCategory,         "التصنيف",          12,  item => item.Product?.Category ?? "",       null,          IsImage: false),
             new(InvoicePdfExporter.Keys.ItemsPattern,          "النقشة",           13,  item => item.Product?.Pattern ?? "",        null,          IsImage: false),
@@ -77,7 +77,6 @@ public static class InvoiceExcelExporter
         };
         var visibleCols = allCols.Where(c => !IsHidden(c.Key)).ToList();
 
-        // LastCol = عدد الأعمدة الظاهرة أو 7
         int lastCol = Math.Max(visibleCols.Count, 7);
 
         // ============ تحميل صور الأصناف مسبقًا ============
@@ -204,7 +203,6 @@ public static class InvoiceExcelExporter
                 cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
                 cell.Style.Border.OutsideBorderColor = XLColor.Black;
 
-                // ضبط عرض العمود
                 ws.Column(i + 1).Width = visibleCols[i].Width;
             }
             row++;
@@ -219,7 +217,6 @@ public static class InvoiceExcelExporter
 
                     if (col.IsImage)
                     {
-                        // عمود الصورة: نضع علامة فارغة، ونضيف الصورة فوق الخلية بعد قليل
                         cell.Value = "";
                     }
                     else
@@ -241,9 +238,8 @@ public static class InvoiceExcelExporter
                     cell.Style.Border.OutsideBorderColor = XLColor.Black;
                 }
 
-                // ضبط ارتفاع الصف ليتّسع للصورة
                 bool hasImage = visibleCols.Any(c => c.IsImage);
-                ws.Row(row).Height = hasImage ? 60 : 22;
+                ws.Row(row).Height = hasImage ? 34 : 22;   // ← ارتفاع صف أصغر
 
                 // إضافة الصور (إن وُجدت)
                 for (int i = 0; i < visibleCols.Count; i++)
@@ -258,7 +254,7 @@ public static class InvoiceExcelExporter
                         using var ms = new MemoryStream(bytes);
                         var pic = ws.AddPicture(ms)
                             .MoveTo(ws.Cell(row, i + 1))
-                            .WithSize(70, 50);
+                            .WithSize(30, 24);   // ← صورة صغيرة
                         pic.Name = $"ProductImage_{item.LineNo}";
                     }
                     catch
