@@ -46,6 +46,7 @@ dotnet-ef                   8.0.31 (أداة عامة)
 حزمة JWT                    Microsoft.AspNetCore.Authentication.JwtBearer 8.0.11
 حزمة BCrypt                 BCrypt.Net-Next 4.2.0
 حزمة PDF preview            Microsoft.Web.WebView2 1.0.4258.31 ✅
+اللغة                       العربية فقط (لا دعم متعدد اللغات حاليًا)
 الفرع الرئيسي               main
 الريموت                     origin → https://github.com/sadekattiaa-pixel/invoice-.git
 
@@ -63,36 +64,22 @@ Invoice-CSharp/
 ├── src/
 │   ├── Invoice.Domain/               (class library)
 │   │   └── Entities/
-│   │       ├── Supplier.cs
-│   │       ├── Product.cs
-│   │       ├── Invoice.cs
-│   │       ├── InvoiceItem.cs
-│   │       ├── InvoicePayment.cs
-│   │       ├── InvoiceDiscount.cs
-│   │       ├── InvoiceExpense.cs
+│   │       ├── Supplier.cs, Product.cs
+│   │       ├── Invoice.cs, InvoiceItem.cs, InvoicePayment.cs
+│   │       ├── InvoiceDiscount.cs, InvoiceExpense.cs
 │   │       ├── Settings.cs
-│   │       ├── User.cs
-│   │       ├── Role.cs
-│   │       ├── Permission.cs
-│   │       ├── UserRole.cs
-│   │       └── RolePermission.cs
+│   │       └── User.cs, Role.cs, Permission.cs, UserRole.cs, RolePermission.cs
 │   │
 │   ├── Invoice.Application/          (class library)
-│   │   ├── Exceptions/
-│   │   │   └── DomainException.cs
+│   │   ├── Exceptions/DomainException.cs
 │   │   ├── Calculations/
 │   │   │   ├── InvoiceCalculator.cs
 │   │   │   ├── InvoiceItemInput.cs
 │   │   │   └── InvoiceCalculationResult.cs
 │   │   └── Dtos/
-│   │       ├── InvoiceSaveRequest.cs
-│   │       ├── InvoiceItemRequest.cs
-│   │       ├── InvoiceAmountRequest.cs
-│   │       ├── CompanyInfoDto.cs
-│   │       ├── ReportColumn.cs
-│   │       ├── ReportRow.cs
-│   │       ├── ReportSummaryItem.cs
-│   │       └── ReportTableDto.cs
+│   │       ├── InvoiceSaveRequest.cs, InvoiceItemRequest.cs
+│   │       ├── InvoiceAmountRequest.cs, CompanyInfoDto.cs
+│   │       └── ReportColumn.cs, ReportRow.cs, ReportSummaryItem.cs, ReportTableDto.cs
 │   │
 │   ├── Invoice.Infrastructure/       (class library)
 │   │   ├── Persistence/
@@ -100,63 +87,56 @@ Invoice-CSharp/
 │   │   │   ├── DesignTimeDbContextFactory.cs
 │   │   │   └── Migrations/
 │   │   ├── Exporters/
-│   │   │   ├── InvoicePdfExporter.cs     ← 21 عمودًا + صور + خيارات hidden ✅
+│   │   │   ├── InvoicePdfExporter.cs     ← 31 مفتاحًا + صور ✅
 │   │   │   ├── InvoiceExcelExporter.cs   ← نفس الميزات ✅
 │   │   │   ├── ReportPdfExporter.cs
 │   │   │   └── ReportExcelExporter.cs
 │   │   ├── Storage/
 │   │   │   ├── LogoStorage.cs
-│   │   │   └── ProductImageStorage.cs    ← تخزين صور الأصناف على الخادم ✅
+│   │   │   └── ProductImageStorage.cs    ← تخزين صور الأصناف ✅
 │   │   └── Services/
 │   │       └── ReportDataService.cs
 │   │
 │   ├── Invoice.Api/                  (webapi)
 │   │   ├── Controllers/
-│   │   │   ├── SuppliersController.cs
-│   │   │   ├── ProductsController.cs     ← CRUD + رفع/جلب/حذف صورة ✅
-│   │   │   ├── InvoicesController.cs
-│   │   │   ├── ReportsController.cs
-│   │   │   ├── ExportsController.cs      ← يدعم ?hidden=a,b,c ✅
-│   │   │   ├── SettingsController.cs
+│   │   │   ├── SuppliersController.cs, ProductsController.cs
+│   │   │   ├── InvoicesController.cs, ReportsController.cs
+│   │   │   ├── ExportsController.cs, SettingsController.cs
 │   │   │   └── AuthController.cs
 │   │   ├── Data/DataSeeder.cs
 │   │   ├── Security/Permissions.cs
 │   │   ├── Dtos/Auth/...
 │   │   ├── Services/...
 │   │   ├── Program.cs
-│   │   ├── appsettings.json
-│   │   └── appsettings.Development.json
+│   │   └── appsettings*.json
 │   │
 │   └── Invoice.Desktop/              (winforms)
 │       ├── Program.cs
 │       ├── Services/
-│       │   ├── ApiClient.cs                  ← + رفع/جلب/حذف صور ✅
-│       │   └── PreferencesService.cs         ← + ColumnWidths ✅
-│       ├── Models/
-│       │   └── InvoiceDtos.cs
+│       │   ├── ApiClient.cs
+│       │   └── PreferencesService.cs
+│       ├── Models/InvoiceDtos.cs
 │       ├── Shared/
 │       │   ├── ColumnsDialog.cs
-│       │   ├── ExportOptionsDialog.cs        ← 9 أجزاء + 21 عمودًا ✅
-│       │   └── PdfPreviewForm.cs             ← WebView2 ✅
+│       │   ├── ExportOptionsDialog.cs
+│       │   └── PdfPreviewForm.cs
 │       ├── Forms/
 │       │   ├── LoginForm.cs
 │       │   └── MainForm.cs
 │       └── UserControls/
-│           ├── DashboardUserControl.cs       ← + مسودات + فتح مزدوج ✅
-│           ├── SuppliersUserControl.cs       ← + عرض أعمدة بالسحب ✅
-│           ├── ProductsUserControl.cs        ← + صور من الخادم + عرض أعمدة ✅
-│           ├── InvoiceUserControl.cs         ← 3 تبويبات + 21 عمودًا ✅
+│           ├── DashboardUserControl.cs
+│           ├── SuppliersUserControl.cs
+│           ├── ProductsUserControl.cs
+│           ├── InvoiceUserControl.cs
 │           ├── InvoiceDialogs.cs
-│           ├── InvoiceAmountsPanel.cs        ← تنسيق جديد (يمين المصاريف) ✅
-│           ├── InvoiceItemsPanel.cs          ← 21 عمودًا + صور + ScrollBars ✅
-│           └── ArchiveUserControl.cs         ← فتح مزدوج + عرض أعمدة ✅
+│           ├── InvoiceAmountsPanel.cs
+│           ├── InvoiceItemsPanel.cs
+│           └── ArchiveUserControl.cs
 │
-└── tests/
-    └── Invoice.Tests/
+└── tests/Invoice.Tests/
 
 3.2 مراجع المشروعات (معماري صارم)
 ─────────────────────────────────
-
 Domain          ← لا مراجع
 Application     → Domain
 Infrastructure  → Application + Domain
@@ -181,14 +161,16 @@ __EFMigrationsHistory
 
 4.3 مفاتيح Settings
 ────────────────────
-company_name, company_address, company_phone, company_email,
-company_website, company_logo_path
+- company_name, company_address, company_phone,
+  company_email, company_website, company_logo_path
+- (مستقبلًا) currency_symbol, backup_schedule, backup_folder,
+  backup_retention, dark_mode, font_size
 
 4.4 حقول Product كاملة
 ──────────────────────
 Id, Code, Name, Category, Pattern,
 Ah, L, W, H, Oh (decimal?),
-Layout (int?), LayoutImageFilename (string? — مسار كامل على الخادم الآن),
+Layout (int?), LayoutImageFilename (string? — مسار كامل على الخادم),
 Pallet (int?), SupplierId, CreatedAt, UpdatedAt, RowVersion
 
 4.5 حقول RowVersion
@@ -202,21 +184,21 @@ Suppliers, Products, Invoices, Users, Roles
 5.1 الأصناف (Products)
 ──────────────────────
 - التصنيفات: Batteries, Car Tires, Truck Tires.
-- **جميع التصنيفات**: الكود إلزامي، والاسم = الكود تلقائيًا.
+- جميع التصنيفات: الكود إلزامي، والاسم = الكود تلقائيًا.
 - بطارية: لا نقشة. حقول إضافية: Ah, L, W, H, Oh, Layout, صورة, Pallet.
 - إطار: النقشة إلزامية. باقي الحقول الإضافية = null.
-- **صور الأصناف**: تُخزَّن على الخادم (%LOCALAPPDATA%\CostProfitApp\Uploads\products\).
-  - يُخزَّن المسار الكامل في DB.
-  - رفع: POST /api/products/{id}/image (multipart).
-  - جلب: GET /api/products/{id}/image.
-  - حذف: DELETE /api/products/{id}/image.
+- صور الأصناف: تُخزَّن على الخادم
+  (%LOCALAPPDATA%\CostProfitApp\Uploads\products\).
+  - رفع: POST /api/products/{id}/image (multipart)
+  - جلب: GET /api/products/{id}/image
+  - حذف: DELETE /api/products/{id}/image
 
 5.2 الفواتير (Invoices)
 ───────────────────────
 - دورة الحياة: Draft → Archived (لا رجوع).
-- الأرشفة: تتطلب حفظ أي تعديلات أولًا؛ الفاتورة المؤرشفة لا تُعدَّل.
+- الأرشفة: تتطلب حفظ أي تعديلات أولًا.
 - الترقيم: INV-{year}-{NNNN} تلقائي متسلسل.
-- الحسابات: تُطبَّق في InvoiceCalculator مع MidpointRounding.AwayFromZero.
+- الحسابات: InvoiceCalculator مع MidpointRounding.AwayFromZero.
 
 5.3 معادلات الحساب
 ──────────────────
@@ -230,11 +212,11 @@ profit_margin = (total_profit / total_sales) × 100
 
 الدقة: Money: 2 منازل، Rate: 6 منازل، Percent: 4 منازل.
 
-5.4 المصادقة والصلاحيات — ✅ مكتمل
-───────────────────────────────────
+5.4 المصادقة والصلاحيات
+───────────────────────
 - BCrypt Work Factor = 12.
 - JWT HMAC-SHA256: Access 60 دقيقة، Refresh 7 أيام.
-- Policies مبنية على claim "permission" بصيغة resource.action.
+- Policies مبنية على claim "permission".
 - المستخدمون:
   - admin / admin123 → Admin (23 صلاحية)
   - accountant / acct123 → Accountant (16 صلاحية)
@@ -252,8 +234,6 @@ exports:   read (1)
 settings:  read/update (2)
 users:     read/create/update/delete (4)
 roles:     read/update (2)
-───────────────────────────────────
-الإجمالي: 23
 
 توزيع الأدوار:
 - Admin:      23/23
@@ -261,41 +241,18 @@ roles:     read/update (2)
 - Viewer:     6/23
 
 ═══════════════════════════════════════════════════════════════
-7. API المُنفَّذ (كل النقاط محمية بـ [Authorize] + Policies)
+7. API المُنفَّذ
 ═══════════════════════════════════════════════════════════════
 
-7.1 Suppliers (/api/suppliers)
-──────────────────────────────
-GET /, GET /{id}, POST /, PUT /{id}, DELETE /{id}
-
-7.2 Products (/api/products)
-────────────────────────────
-GET /, GET /{id}, POST /, PUT /{id}, DELETE /{id}
-POST /{id}/image, GET /{id}/image, DELETE /{id}/image     ← جديد
-
-7.3 Invoices (/api/invoices)
-────────────────────────────
-GET /, GET /{id}, GET next-number,
-POST calculate, POST /, PUT /{id},
-POST /{id}/archive, POST /{id}/duplicate, DELETE /{id}
-
-7.4 Auth (/api/auth)
-────────────────────
-POST login, POST refresh, GET me, POST change-password
-
+7.1 Suppliers (/api/suppliers) — CRUD كامل
+7.2 Products (/api/products) — CRUD + صور (رفع/جلب/حذف)
+7.3 Invoices (/api/invoices) — 9 نقاط
+7.4 Auth (/api/auth) — login, refresh, me, change-password
 7.5 Reports (/api/reports) — 7 نقاط
-────────────────────────────────────
-dashboard, supplier/{id}, profit, period,
-price-changes/{productId}, most-profitable, best-selling
+7.6 Exports (/api/exports) — invoice/pdf, invoice/excel (يدعم ?hidden=)
+7.7 Settings (/api/settings) — GET, PUT, POST/GET/DELETE logo
 
-7.6 Exports (/api/exports) — يدعم ?hidden=a,b,c
-───────────────────────────────────────────────
-GET invoice/{id}/pdf?hidden=...
-GET invoice/{id}/excel?hidden=...
-GET report/{type}/pdf
-GET report/{type}/excel
-
-مفاتيح الإخفاء المتاحة (InvoicePdfExporter.Keys) — 31 مفتاحًا:
+مفاتيح الإخفاء (31 مفتاحًا):
   logo, company_info, supplier_info, invoice_info, notes,
   payments, discounts, expenses, summary,
   items.line_no, items.code, items.ah, items.l, items.w, items.h,
@@ -306,34 +263,21 @@ GET report/{type}/excel
   items.sale_dzd, items.total_sale,
   items.unit_profit, items.total_profit
 
-7.7 Settings (/api/settings)
-────────────────────────────
-GET /, PUT /, POST /logo, GET /logo, DELETE /logo
-
 ═══════════════════════════════════════════════════════════════
 8. حالة Desktop
 ═══════════════════════════════════════════════════════════════
 
 المُنجَز ✅:
-- ApiClient (تسجيل + auto-refresh + تنزيل + رفع/جلب/حذف صور)
-- LoginForm
-- MainForm (قائمة جانبية + 7 أزرار)
+- ApiClient (تسجيل + auto-refresh + رفع/جلب/حذف صور)
+- LoginForm, MainForm
 - PreferencesService (أعمدة مخفية + عروض أعمدة + حجم خط + وضع داكن)
-- Shared/ColumnsDialog (نافذة إخفاء الأعمدة)
-- Shared/ExportOptionsDialog (9 أجزاء + 21 عمودًا + إظهار/إخفاء الكل)
-- Shared/PdfPreviewForm (معاينة PDF عبر WebView2)
-- DashboardUserControl (KPIs + جدول مسودات + نقر مزدوج)
-- SuppliersUserControl (CRUD + عرض أعمدة بالسحب)
-- ProductsUserControl (CRUD + صور من الخادم + عرض أعمدة)
+- Shared/ColumnsDialog, ExportOptionsDialog, PdfPreviewForm
+- DashboardUserControl (KPIs + مسودات + فتح مزدوج)
+- SuppliersUserControl (CRUD + عرض أعمدة)
+- ProductsUserControl (CRUD + صور من الخادم)
 - InvoiceUserControl (3 تبويبات + 21 عمودًا + معاينة PDF)
-- InvoiceDialogs (اختيار صنف + إدخال مبلغ)
-- InvoiceAmountsPanel (مدفوعات/خصومات/مصاريف + ScrollBars)
-- InvoiceItemsPanel (21 عمودًا + صور + ScrollBars + Enter)
-- ArchiveUserControl (قائمة + فلترة + تصدير + نقر مزدوج + عرض أعمدة)
-
-ملاحظات إضافية:
-- PdfPreviewForm يستخدم WebView2 → يجب تثبيت WebView2 Runtime (مُضمَّن مع Windows 10/11).
-- InvoiceItemsPanel.GetHiddenServerKeys() تُرجِع مفاتيح الخادم من أسماء الأعمدة.
+- InvoiceDialogs, InvoiceAmountsPanel, InvoiceItemsPanel
+- ArchiveUserControl (قائمة + تصدير + فتح مزدوج)
 
 ═══════════════════════════════════════════════════════════════
 9. مسارات التخزين
@@ -341,11 +285,9 @@ GET /, PUT /, POST /logo, GET /logo, DELETE /logo
 
 شعار الشركة (على الخادم):
   %LOCALAPPDATA%\CostProfitApp\Uploads\company\logo.<ext>
-  يُدار عبر: Invoice.Infrastructure.Storage.LogoStorage
 
-صور الأصناف (على الخادم — جديد):
+صور الأصناف (على الخادم):
   %LOCALAPPDATA%\CostProfitApp\Uploads\products\product_<guid>.<ext>
-  يُدار عبر: Invoice.Infrastructure.Storage.ProductImageStorage
 
 مجلد WebView2 (Desktop):
   %LOCALAPPDATA%\CostProfitApp\Desktop\WebView2\
@@ -359,7 +301,6 @@ GET /, PUT /, POST /logo, GET /logo, DELETE /logo
 
 الفرع:               main
 الريموت:             origin → https://github.com/sadekattiaa-pixel/invoice-.git
-آخر Commit محلي:     [يُحدَّث بعد كل حفظ]
 هوية Git:            ADNAN / adnan@alintiqaa.local
 
 ═══════════════════════════════════════════════════════════════
@@ -370,15 +311,14 @@ GET /, PUT /, POST /logo, GET /logo, DELETE /logo
 ──────────────────
 ✅ المصادقة (JWT + BCrypt)
 ✅ Policies على كل نقاط API
-✅ Desktop: كل الشاشات الرئيسية (Dashboard/Suppliers/Products/Invoice/Archive)
-✅ Desktop: عرض الأعمدة بالسحب مع حفظ تلقائي
-✅ Server: PDF/Excel يدعمان 31 مفتاح إخفاء
-✅ Desktop: نافذة خيارات التصدير (9 أجزاء + 21 عمودًا)
-✅ Desktop: معاينة PDF عبر WebView2
-✅ Server: تخزين صور الأصناف على الخادم
-✅ Export: صور الأصناف في PDF/Excel
-✅ Dashboard: جدول المسودات + فتح مزدوج
-✅ Archive: فتح مزدوج (تعديل/عرض)
+✅ كل الشاشات الرئيسية (Dashboard/Suppliers/Products/Invoice/Archive)
+✅ عرض الأعمدة بالسحب مع حفظ تلقائي
+✅ PDF/Excel يدعمان 31 مفتاح إخفاء
+✅ نافذة خيارات التصدير (9 أجزاء + 21 عمودًا)
+✅ معاينة PDF عبر WebView2
+✅ تخزين صور الأصناف على الخادم + عرضها في التصدير
+✅ Dashboard: مسودات + فتح مزدوج
+✅ Archive: فتح مزدوج
 ✅ Invoice: 3 تبويبات + 21 عمودًا + Enter navigation
 
 11.2 نواقص عامة
@@ -386,42 +326,109 @@ GET /, PUT /, POST /logo, GET /logo, DELETE /logo
 ⚠️ لا Audit Log.
 ⚠️ لا Refresh Token Blacklist.
 ⚠️ لا اختبارات وحدة حقيقية.
-⚠️ شاشة Reports/Settings في Desktop لم تُبنَ بعد.
-⚠️ الوضع الداكن + حجم الخط (التفضيلات موجودة لكن الميزة غير مطبقة).
+⚠️ شاشة Reports/Settings/Users في Desktop لم تُبنَ بعد.
 ⚠️ لا Controllers لإدارة Users/Roles.
 ⚠️ Jwt:Key في appsettings.json مكشوف.
 ⚠️ كلمات المرور الافتراضية ضعيفة.
-⚠️ رمز العملة القابل للتخصيص (د.ل/$/€) — لم يُنفَّذ.
-⚠️ ترحيل الصور القديمة (المخزَّنة بأسماء ملفات محلية) — تحتاج خطوة منفصلة.
-⚠️ تقارير PDF/Excel لا تدعم hidden بعد (فقط الفواتير).
+⚠️ رمز العملة القابل للتخصيص — لم يُنفَّذ.
+⚠️ تقارير PDF/Excel لا تدعم hidden بعد.
+⚠️ لم يُنفَّذ: الوضع الداكن، حجم الخط في الواجهة.
+⚠️ لا Backup/Restore.
 
 ═══════════════════════════════════════════════════════════════
-12. أولويات العمل القادم
+12. خطة شاشة الإعدادات (SettingsUserControl)
 ═══════════════════════════════════════════════════════════════
 
-1. ⏭️ شاشة Settings (مفتاح/قيمة + رفع شعار + رمز عملة)
-2. ⏭️ شاشة Reports (7 تقارير + تصدير PDF/Excel)
-3. ميزة حجم الخط
-4. ميزة الوضع الداكن
-5. ترحيل صور الأصناف القديمة
-6. تقارير PDF/Excel تدعم hidden keys
-7. Import من Excel
-8. Backup/Restore
-9. Audit Log
+القرارات المعتمدة:
+- اللغة: العربية فقط (لا دعم متعدد اللغات).
+- تبويب الصور (رفع + ربط): ملغى.
+- الاستعادة وإعادة التعيين: تُبنى كاملة في الواجهة (بتأكيدات مضاعفة).
+- رمز العملة: مؤجل.
+- إدارة المستخدمين: شاشة مستقلة (بعد الإعدادات) — انظر القسم 13.
+
+التبويبات (6 تبويبات):
+
+| # | التبويب | المحتوى | الحالة |
+|---|---------|---------|--------|
+| 1 | عام | حجم الخط + الوضع الداكن/الفاتح | ⏳ |
+| 2 | بيانات الشركة | اسم/عنوان/هاتف/بريد/موقع + شعار | ⏳ |
+| 3 | الامان | تغيير اسم المستخدم + كلمة المرور | ⏳ |
+| 4 | النسخ الاحتياطي | يدوي + تلقائي + استعادة + إعادة تعيين | ⏳ |
+| 5 | حول البرنامج | معلومات ثابتة + إصدار | ⏳ |
+
+الموجات المقترحة (~14 مرحلة):
+
+الموجة 1:
+- S1: شاشة Settings (TabControl فارغة) + ربط في MainForm
+- S2: تبويب "حول البرنامج"
+- S3: تبويب "بيانات الشركة" (نصوص)
+- S4: تبويب "بيانات الشركة" (شعار: رفع/عرض/حذف)
+
+الموجة 2:
+- S5: تبويب "الامان" — تغيير كلمة المرور
+- S6: تبويب "الامان" — تغيير اسم المستخدم (يحتاج API جديد)
+
+الموجة 3:
+- S7: تبويب "عام" — حجم الخط
+- S8: تبويب "عام" — الوضع الداكن/الفاتح
+
+الموجة 4:
+- S9: تبويب "النسخ الاحتياطي" — نسخ يدوي
+- S10: تبويب "النسخ الاحتياطي" — نسخ تلقائي (BackgroundService)
+- S11: تبويب "النسخ الاحتياطي" — عرض النسخ المتاحة
+- S12: تبويب "النسخ الاحتياطي" — استعادة (⚠️ خطر)
+- S13: تبويب "النسخ الاحتياطي" — إعادة تعيين (⚠️ خطر أقصى)
 
 ═══════════════════════════════════════════════════════════════
-13. الأوامر السريعة المرجعية
+13. خطة شاشة إدارة المستخدمين (UsersUserControl) — مؤجلة
+═══════════════════════════════════════════════════════════════
+
+القرار: تُبنى بعد إكمال شاشة الإعدادات.
+
+الوصف:
+- صفحة مستقلة في القائمة الجانبية (فقط لمن يملك users.read).
+- يظهر زرها فقط لمستخدم Admin.
+
+التبويبات:
+1. المستخدمون: جدول + إضافة/تعديل/حذف/تعطيل/إعادة تعيين كلمة المرور
+2. الأدوار والصلاحيات: جدول الأدوار + مصفوفة صلاحيات (23 × N)
+
+المكونات المطلوبة (Backend):
+- UsersController (CRUD + إعادة تعيين كلمة المرور)
+- RolesController (CRUD)
+- DTOs جديدة
+
+المكونات المطلوبة (Desktop):
+- UsersUserControl (تبويبان)
+- ربطها في MainForm + إخفاؤها لمن لا يملك users.read
+
+التعقيد: 🔴 معقد جدًا — 12-16 مرحلة كاملة.
+المخاطر: عالية (خطأ في تعديل الأدوار → فقدان السيطرة على النظام).
+الترتيب: بعد الإعدادات. قبل التقارير أو بعدها (يُحدَّد لاحقًا).
+
+═══════════════════════════════════════════════════════════════
+14. أولويات العمل القادم
+═══════════════════════════════════════════════════════════════
+
+1. ⏭️ شاشة Settings (الموجة 1 → 4)
+2. شاشة إدارة المستخدمين (UsersUserControl)
+3. شاشة Reports
+4. رمز العملة (مؤجل)
+5. تقارير PDF/Excel تدعم hidden
+6. Import من Excel
+7. Audit Log
+
+═══════════════════════════════════════════════════════════════
+15. الأوامر السريعة المرجعية
 ═══════════════════════════════════════════════════════════════
 
 تشغيل الخادم
 ────────────
 dotnet run --project src/Invoice.Api
-- Swagger: http://localhost:5124/swagger
 
-إيقاف الخادم (إن كان يعمل)
-──────────────────────────
+إيقاف الخادم
+────────────
 Get-Process -Name "Invoice.Api" -ErrorAction SilentlyContinue | Stop-Process -Force
-أو:
 taskkill /F /IM Invoice.Api.exe
 taskkill /F /IM Invoice.Desktop.exe
 taskkill /F /IM dotnet.exe
@@ -433,10 +440,6 @@ dotnet run --project src/Invoice.Desktop
 بناء الحل
 ─────────
 dotnet build Invoice.sln
-
-تنظيف
-─────
-dotnet clean Invoice.sln
 
 إنشاء Migration
 ───────────────
@@ -451,31 +454,23 @@ dotnet ef database update \
   --project src/Invoice.Infrastructure \
   --startup-project src/Invoice.Infrastructure
 
-فحص المستخدمين
-──────────────
-sqlcmd -S localhost\SQLEXPRESS -E -d InvoiceDb -C -Q "SELECT u.Id, u.Username, r.Name AS RoleName FROM Users u LEFT JOIN UserRoles ur ON ur.UserId=u.Id LEFT JOIN Roles r ON r.Id=ur.RoleId ORDER BY u.Id"
-
-فحص مسار صور الأصناف
-────────────────────
-sqlcmd -S localhost\SQLEXPRESS -E -d InvoiceDb -C -Q "SELECT Id, Code, LayoutImageFilename FROM Products WHERE LayoutImageFilename IS NOT NULL"
-
 حفظ في Git
 ──────────
 git add . ; git commit -m "message"
 
 ═══════════════════════════════════════════════════════════════
-14. بيانات الاختبار الحالية
+16. بيانات الاختبار الحالية
 ═══════════════════════════════════════════════════════════════
 
 مورد:             S-001 / مورد الاختبار الأول / طرابلس، ليبيا
-بطارية:           id=1, BAT-100, Batteries, 100AH (+ حقول إضافية)
+بطارية:           id=1, BAT-100, Batteries, 100AH
 إطار:             id=3, TIRE-..., Continental HDR2, Truck Tires
 فاتورة:           id=1, INV-2026-0001, SUP-2026-001، مؤرشفة
 مستخدمو النظام:   admin / accountant / viewer
 أدوار:            Admin (23)، Accountant (16)، Viewer (6)
 
 ═══════════════════════════════════════════════════════════════
-15. قواعد التعامل مع المساعد (مهمة!)
+17. قواعد التعامل مع المساعد (مهمة!)
 ═══════════════════════════════════════════════════════════════
 
 ✅ خطوة واحدة في كل رسالة.
@@ -485,24 +480,11 @@ git add . ; git commit -m "message"
 ✅ الصق الأخطاء كاملة عند الحدوث.
 ✅ اللغة: عربية للشرح، إنجليزية للكود.
 ✅ عند تعديل ملف، أعطِ أولًا أمر code path لفتحه.
-✅ عند التحقق من قاعدة البيانات، استخدم sqlcmd.
 ✅ أمر واحد فقط في كل رسالة، وملف واحد فقط في كل رسالة.
-✅ الحفظ في Git يكون بعد نهاية كل **مرحلة كاملة** — وليس بعد كل كود أو ملف.
+✅ الحفظ في Git بعد كل مرحلة كاملة.
 
 ═══════════════════════════════════════════════════════════════
-16. نماذج رسائل جاهزة
-═══════════════════════════════════════════════════════════════
-
-رسالة استئناف جديدة
-───────────────────
-اقرأ HANDOFF.md ثم استأنف من [اسم المهمة].
-
-فحص حالة سريعة
-──────────────
-git status ; git log --oneline -5
-
-═══════════════════════════════════════════════════════════════
-17. حالة الاستقرار الحالية
+18. حالة الاستقرار الحالية
 ═══════════════════════════════════════════════════════════════
 
 المكوّن                          الحالة                              مُختبَر
@@ -515,32 +497,25 @@ API — كل الـ Controllers        ✅ محمي بـ [Authorize]            
 API — Products images           ✅ رفع/جلب/حذف                     ✅
 Authorization Policies          ✅ 403 على النقصان                  ✅
 DataSeeder                      ✅ 3 مستخدمين + 3 أدوار + 23 صلاحية ✅
-Desktop — ApiClient             ✅ مستقر                            ✅
-Desktop — LoginForm             ✅ يعمل                             ✅
-Desktop — MainForm              ✅ يعمل                             ✅
-Desktop — Dashboard             ✅ KPIs + مسودات + فتح مزدوج       ✅
-Desktop — Suppliers             ✅ CRUD + عرض أعمدة                 ✅
-Desktop — Products              ✅ CRUD + صور + عرض أعمدة           ✅
-Desktop — Invoice               ✅ 3 تبويبات + 21 عمودًا + معاينة   ✅
-Desktop — Archive               ✅ قائمة + تصدير + فتح مزدوج        ✅
-Desktop — Reports               ⚪ لم يبدأ                          ❌
+Desktop — كل الشاشات            ✅ تعمل                             ✅
 Desktop — Settings              ⚪ لم يبدأ                          ❌
+Desktop — Users                 ⚪ لم يبدأ                          ❌
+Desktop — Reports               ⚪ لم يبدأ                          ❌
 
 ═══════════════════════════════════════════════════════════════
-18. نقطة الاستئناف الحالية
+19. نقطة الاستئناف الحالية
 ═══════════════════════════════════════════════════════════════
 
-الحالة: اكتملت **16 تعديلًا** مُخطَّطًا + تعديلات إضافية على شاشة الفاتورة والتصدير.
-جميع الميزات الرئيسية تعمل ومُختبَرة.
+الحالة: اكتملت تعديلات شاشة الفاتورة والتصدير.
+جاهزون لبدء **شاشة الإعدادات**.
 
-آخر ما تم إنجازه:
-- المرحلة 1-15: تعديلات شاملة على جميع الشاشات والتصدير.
-- تحسينات تصدير PDF: خطوط أكبر + إزالة عناوين + توسيط رأسي/أفقي.
-- صور الأصناف: نُقلت للخادم، تظهر في PDF و Excel.
-
-الخطوة القادمة المقترحة:
-بناء شاشة **Settings** (مفتاح/قيمة + رفع شعار + رمز العملة القابل للتخصيص).
+الخطوة القادمة:
+المرحلة S1 من شاشة الإعدادات:
+- إنشاء `src/Invoice.Desktop/UserControls/SettingsUserControl.cs`
+- TabControl بـ 5 تبويبات فارغة:
+  (عام / بيانات الشركة / الامان / النسخ الاحتياطي / حول البرنامج)
+- ربطها في MainForm عند النقر على "الإعدادات"
 
 نهاية HANDOFF.
 
-عند بدء جلسة جديدة، اقرأ هذا الملف بالكامل وابدأ من القسم 18.
+عند بدء جلسة جديدة، اقرأ هذا الملف بالكامل وابدأ من القسم 19.
